@@ -166,6 +166,7 @@ jobs:
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/service-account.json
           YOUTUBE_COOKIES_PATH: ${{ github.workspace }}/youtube_cookies.txt
+          YT_DLP_PROXY: ${{ secrets.YT_DLP_PROXY }}
         run: python -m app.multi_scheduler
 
       - name: Upload generated shorts
