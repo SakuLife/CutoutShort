@@ -19,7 +19,7 @@ openai-whisper==20240930
 google-generativeai==0.8.3
 
 # Video Processing
-yt-dlp==2024.10.7
+yt-dlp>=2025.1.0
 Pillow==11.0.0
 
 # Utilities

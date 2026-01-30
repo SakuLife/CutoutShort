@@ -52,12 +52,17 @@ def download_youtube_video(
         "--no-warnings",
     ]
 
-    # Cookiesファイルがあれば使用（Bot検出回避）
+    # Cookiesファイルがあれば使用し、player_clientを最適化
     if YOUTUBE_COOKIES_PATH and Path(YOUTUBE_COOKIES_PATH).exists():
         cmd.extend(["--cookies", YOUTUBE_COOKIES_PATH])
+        # Cookies使用時はデフォルトクライアント（tv_downgraded,web,web_safari）
         log_info("Using YouTube cookies for authentication", job_id=job_id)
     else:
-        log_warning("No YouTube cookies found, may be blocked by YouTube", job_id=job_id)
+        # Cookiesなし: web_embeddedはPO Token不要でBot検出を回避しやすい
+        cmd.extend([
+            "--extractor-args", "youtube:player_client=web_embedded,web_safari",
+        ])
+        log_info("No cookies, using web_embedded client for bot bypass", job_id=job_id)
 
     cmd.append(url)
 
@@ -93,6 +98,41 @@ def download_youtube_video(
         raise YtDlpError(f"YouTube download timeout: {e}") from e
 
     except subprocess.CalledProcessError as e:
+        # Cookies使用時にBot検出されたら、web_embeddedクライアントでリトライ
+        if "Sign in to confirm" in (e.stderr or "") and YOUTUBE_COOKIES_PATH:
+            log_warning(
+                "Bot detected with cookies, retrying with web_embedded client",
+                job_id=job_id,
+            )
+            retry_cmd = [
+                "yt-dlp",
+                "--format",
+                "bestvideo[ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+                "--merge-output-format", "mp4",
+                "--output", output_path,
+                "--no-playlist",
+                "--no-warnings",
+                "--extractor-args", "youtube:player_client=web_embedded,web_safari",
+                url,
+            ]
+            try:
+                subprocess.run(
+                    retry_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=config.DOWNLOAD_TIMEOUT,
+                    check=True,
+                )
+                if Path(output_path).exists():
+                    log_info(f"Retry succeeded: {output_path}", job_id=job_id)
+                    return output_path
+            except subprocess.CalledProcessError as retry_e:
+                log_error(
+                    "Retry also failed",
+                    job_id=job_id,
+                    meta={"stderr": retry_e.stderr},
+                )
+
         log_error(
             f"yt-dlp failed with return code {e.returncode}",
             job_id=job_id,
@@ -131,6 +171,10 @@ def get_video_info(url: str, job_id: str | None = None) -> dict:
     # Cookiesファイルがあれば使用
     if YOUTUBE_COOKIES_PATH and Path(YOUTUBE_COOKIES_PATH).exists():
         cmd.extend(["--cookies", YOUTUBE_COOKIES_PATH])
+    else:
+        cmd.extend([
+            "--extractor-args", "youtube:player_client=web_embedded,web_safari",
+        ])
 
     cmd.append(url)
 
