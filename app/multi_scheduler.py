@@ -140,11 +140,8 @@ async def process_youtuber(youtuber: YouTuberInfo):
 
     if not shorts_candidates:
         log_warning(f"No shorts candidates created for {youtuber.name}")
-        # 動画は処理済みとしてマーク（次回スキップ）
-        update_youtuber_last_video(
-            row_index=youtuber.row_index,
-            video_id=latest_video.video_id
-        )
+        # ダウンロード/処理失敗の可能性があるため、処理済みにしない
+        # → 次回再試行される
         return
 
     # 4. スコア閾値以上のものをフィルタ
