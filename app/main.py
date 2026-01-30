@@ -2,25 +2,24 @@
 import asyncio
 import uuid
 from datetime import datetime
-from typing import Dict
 from pathlib import Path
-from fastapi import FastAPI, Header, HTTPException, BackgroundTasks
-from fastapi.responses import JSONResponse, FileResponse
+
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException
+from fastapi.responses import FileResponse, JSONResponse
 
 from app.config import config
-from app.logging_utils import log_info, log_error, log_warning, set_trace_id
+from app.logging_utils import log_error, log_info, log_warning, set_trace_id
 from app.models import (
     CreateJobRequest,
     CreateJobResponse,
+    HealthResponse,
+    Job,
+    JobArtifacts,
     JobStatusResponse,
     RetryJobRequest,
-    HealthResponse,
     VersionResponse,
-    Job,
-    JobArtifacts
 )
 from app.worker import run_job
-
 
 # FastAPIアプリケーション
 app = FastAPI(
@@ -31,10 +30,10 @@ app = FastAPI(
 
 # ジョブストア（インメモリ）
 # 本番環境ではRedis/Firestoreを推奨
-JOBS: Dict[str, Job] = {}
+JOBS: dict[str, Job] = {}
 
 # 冪等キーマップ（idempotency_key -> job_id）
-IDEMPOTENCY_MAP: Dict[str, str] = {}
+IDEMPOTENCY_MAP: dict[str, str] = {}
 
 # セマフォ（並列実行数制限）
 JOB_SEMAPHORE = asyncio.Semaphore(config.MAX_CONCURRENT_JOBS)
@@ -100,7 +99,7 @@ async def create_job(
         existing_job_id = IDEMPOTENCY_MAP.get(request.idempotency_key)
         if existing_job_id:
             log_info(
-                f"Idempotency key match, returning existing job",
+                "Idempotency key match, returning existing job",
                 meta={"idempotency_key": request.idempotency_key, "job_id": existing_job_id}
             )
             return CreateJobResponse(
@@ -113,7 +112,7 @@ async def create_job(
     trace_id = set_trace_id(f"trace-{job_id[:12]}")
 
     log_info(
-        f"Creating job",
+        "Creating job",
         job_id=job_id,
         meta={
             "source_type": request.source_type,
@@ -185,7 +184,7 @@ async def retry_job(
     if job.status != "error":
         raise HTTPException(status_code=400, detail="Job is not in error state")
 
-    log_info(f"Retrying job", job_id=job_id)
+    log_info("Retrying job", job_id=job_id)
 
     # オプションを上書き
     if request.options:
@@ -221,7 +220,7 @@ async def _run_job_with_semaphore(job_id: str, job_request: CreateJobRequest):
         except Exception as e:
             log_error(f"Job execution failed: {e}", job_id=job_id, exc_info=True)
         finally:
-            log_info(f"Job released semaphore", job_id=job_id)
+            log_info("Job released semaphore", job_id=job_id)
 
 
 @app.get("/download/{filename}", tags=["Files"])

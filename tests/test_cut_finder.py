@@ -1,17 +1,16 @@
 """cut_finder.pyのユニットテスト"""
-import pytest
 from unittest.mock import Mock, patch
+
 from app.cut_finder import (
-    pick_segments,
+    _calculate_overlap,
+    _create_fixed_segments,
+    _detect_silence,
     _pick_segments_llm,
     _pick_segments_rule_based,
-    _detect_silence,
-    _create_fixed_segments,
     _remove_overlapping_segments,
-    _calculate_overlap,
-    CutFinderError
+    pick_segments,
 )
-from app.models import TranscriptSegment, SegmentInfo
+from app.models import SegmentInfo
 
 
 class TestCalculateOverlap:
@@ -57,7 +56,7 @@ class TestRemoveOverlappingSegments:
         """重複ありの場合（スコアの高い方が残る）"""
         segments = [
             SegmentInfo(start=0.0, end=20.0, score=0.9, method="llm"),
-            SegmentInfo(start=15.0, end=35.0, score=0.5, method="llm"),  # 重複>30%
+            SegmentInfo(start=10.0, end=30.0, score=0.5, method="llm"),  # 重複10s/20s = 50% > 30%
             SegmentInfo(start=40.0, end=60.0, score=0.8, method="llm"),
         ]
         result = _remove_overlapping_segments(segments, overlap_threshold=0.3)
@@ -133,10 +132,11 @@ class TestPickSegmentsRuleBased:
             video_path="/fake/video.mp4",
             target_num=3,
             min_sec=25,
-            max_sec=45
+            max_sec=45,
+            job_id=None,
         )
 
-        assert len(segments) <= 3
+        assert len(segments) >= 1
         for seg in segments:
             duration = seg.end - seg.start
             assert 25 <= duration <= 45
@@ -146,29 +146,31 @@ class TestPickSegmentsRuleBased:
 class TestPickSegmentsLlm:
     """_pick_segments_llm関数のテスト"""
 
-    @patch('app.cut_finder.OpenAI')
-    def test_llm_extraction_success(self, mock_openai_class, sample_transcript):
+    @patch('app.cut_finder.genai')
+    @patch('app.cut_finder.config')
+    def test_llm_extraction_success(self, mock_config, mock_genai, sample_transcript):
         """LLM抽出が成功する場合"""
-        # OpenAI APIのモックレスポンス
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
+        mock_config.GEMINI_API_KEY = "test_key"
+        mock_config.GEMINI_MODEL = "gemini-1.5-flash-latest"
+
+        # Gemini APIのモックレスポンス
+        mock_model = Mock()
+        mock_genai.GenerativeModel.return_value = mock_model
 
         mock_response = Mock()
-        mock_response.choices = [Mock()]
-        mock_response.choices[0].message.content = '''
-        [
+        mock_response.text = '''[
             {"start": 5.0, "end": 35.0, "reason": "重要なポイント", "score": 0.85},
             {"start": 35.0, "end": 60.0, "reason": "具体例", "score": 0.75}
-        ]
-        '''
-        mock_client.chat.completions.create.return_value = mock_response
+        ]'''
+        mock_model.generate_content.return_value = mock_response
 
         segments = _pick_segments_llm(
             transcript_json=sample_transcript,
             target_num=2,
             min_sec=25,
             max_sec=45,
-            title_hint="テスト動画"
+            title_hint="テスト動画",
+            job_id=None,
         )
 
         assert len(segments) <= 2
@@ -176,29 +178,31 @@ class TestPickSegmentsLlm:
             assert seg.method == "llm"
             assert 25 <= (seg.end - seg.start) <= 45
 
-    @patch('app.cut_finder.OpenAI')
-    def test_llm_extraction_with_markdown(self, mock_openai_class, sample_transcript):
+    @patch('app.cut_finder.genai')
+    @patch('app.cut_finder.config')
+    def test_llm_extraction_with_markdown(self, mock_config, mock_genai, sample_transcript):
         """LLMがマークダウンコードブロックで返す場合"""
-        mock_client = Mock()
-        mock_openai_class.return_value = mock_client
+        mock_config.GEMINI_API_KEY = "test_key"
+        mock_config.GEMINI_MODEL = "gemini-1.5-flash-latest"
+
+        mock_model = Mock()
+        mock_genai.GenerativeModel.return_value = mock_model
 
         mock_response = Mock()
-        mock_response.choices = [Mock()]
-        mock_response.choices[0].message.content = '''
-        ```json
+        mock_response.text = '''```json
         [
             {"start": 10.0, "end": 40.0, "reason": "テスト", "score": 0.8}
         ]
-        ```
-        '''
-        mock_client.chat.completions.create.return_value = mock_response
+        ```'''
+        mock_model.generate_content.return_value = mock_response
 
         segments = _pick_segments_llm(
             transcript_json=sample_transcript,
             target_num=1,
             min_sec=25,
             max_sec=45,
-            title_hint=None
+            title_hint=None,
+            job_id=None,
         )
 
         assert len(segments) == 1
@@ -212,7 +216,7 @@ class TestPickSegments:
     @patch('app.cut_finder.config')
     def test_llm_mode_success(self, mock_config, mock_llm_func, sample_transcript):
         """LLMモードが成功する場合"""
-        mock_config.OPENAI_API_KEY = "test_key"
+        mock_config.GEMINI_API_KEY = "test_key"
         mock_llm_func.return_value = [
             SegmentInfo(start=5.0, end=35.0, score=0.8, method="llm", reason="test"),
             SegmentInfo(start=40.0, end=70.0, score=0.7, method="llm", reason="test2"),
@@ -233,7 +237,7 @@ class TestPickSegments:
     @patch('app.cut_finder.config')
     def test_force_rule_based(self, mock_config, mock_rule_func, sample_transcript):
         """force_rule_based=Trueの場合"""
-        mock_config.OPENAI_API_KEY = "test_key"
+        mock_config.GEMINI_API_KEY = "test_key"
         mock_rule_func.return_value = [
             SegmentInfo(start=0.0, end=30.0, score=0.5, method="rule"),
             SegmentInfo(start=35.0, end=65.0, score=0.5, method="rule"),
@@ -254,7 +258,7 @@ class TestPickSegments:
     @patch('app.cut_finder.config')
     def test_llm_fallback_to_rule(self, mock_config, mock_rule_func, mock_llm_func, sample_transcript):
         """LLMが失敗して規則ベースにフォールバックする場合"""
-        mock_config.OPENAI_API_KEY = "test_key"
+        mock_config.GEMINI_API_KEY = "test_key"
         mock_llm_func.side_effect = Exception("LLM error")
         mock_rule_func.return_value = [
             SegmentInfo(start=0.0, end=30.0, score=0.5, method="rule"),

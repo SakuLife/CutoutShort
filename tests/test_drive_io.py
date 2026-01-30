@@ -1,14 +1,9 @@
 """drive_io.pyのユニットテスト"""
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
-from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
-from app.drive_io import (
-    download_from_drive,
-    upload_to_drive,
-    list_files_in_folder,
-    DriveIOError,
-    _get_drive_service
-)
+
+from app.drive_io import DriveIOError, _get_drive_service, download_from_drive, list_files_in_folder, upload_to_drive
 
 
 class TestGetDriveService:

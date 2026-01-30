@@ -1,0 +1,22 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = ["-v", "--tb=short"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+exclude = [".venv", "__pycache__"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "RUF"]
+ignore = [
+    "RUF001",  # 日本語プロンプト内の全角記号（意図的）
+    "RUF002",  # 日本語docstringの全角文字
+    "RUF003",  # 日本語コメントの全角文字
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]

@@ -1,17 +1,14 @@
 """YouTube API アップロード機能（マルチYouTuber対応）"""
-from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
 from googleapiclient.errors import HttpError
+from googleapiclient.http import MediaFileUpload
 
-from app.logging_utils import log_info, log_error, log_warning
 from app.config import config
+from app.logging_utils import log_error, log_info
 from app.youtube_channel import refresh_access_token
-
 
 # YouTube API のスコープ
 SCOPES = ['https://www.googleapis.com/auth/youtube.upload']
@@ -55,9 +52,9 @@ def upload_video(
     access_token: str,
     privacy_status: str = "public",
     category_id: str = "22",
-    tags: Optional[list[str]] = None,
+    tags: list[str] | None = None,
     is_short: bool = True
-) -> Optional[str]:
+) -> str | None:
     """
     アクセストークンを直接指定してYouTubeにアップロード
     （マルチYouTuber対応用）
@@ -145,9 +142,9 @@ def upload_video_with_refresh_token(
     refresh_token: str,
     privacy_status: str = "public",
     category_id: str = "22",
-    tags: Optional[list[str]] = None,
+    tags: list[str] | None = None,
     is_short: bool = True
-) -> Optional[str]:
+) -> str | None:
     """
     リフレッシュトークンを使ってYouTubeにアップロード
 

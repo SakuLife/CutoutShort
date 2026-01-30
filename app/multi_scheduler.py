@@ -11,34 +11,26 @@
 """
 
 import asyncio
+import os
 import re
 import uuid
-import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from app.config import config
-from app.logging_utils import log_info, log_error, log_warning
-from app.models import CreateJobRequest, JobOptions, Job, JobArtifacts
-from app.worker import run_job
+from app.logging_utils import log_error, log_info, log_warning
+from app.models import CreateJobRequest, Job, JobArtifacts, JobOptions
 from app.sheets import (
-    get_youtubers,
-    update_youtuber_last_video,
-    record_upload,
-    get_pending_shorts,
     add_shorts_to_queue,
+    get_pending_shorts,
+    get_queue_stats,
+    get_youtubers,
     mark_short_uploaded,
-    get_queue_stats
+    record_upload,
+    update_youtuber_last_video,
 )
-from app.youtube_channel import (
-    get_latest_video,
-    refresh_access_token,
-    get_video_url,
-    VideoInfo,
-    YouTuberInfo
-)
-
+from app.worker import run_job
+from app.youtube_channel import VideoInfo, YouTuberInfo, get_latest_video, get_video_url, refresh_access_token
 
 # YouTube API Key（チャンネル情報取得用、Gemini APIと共通）
 YOUTUBE_API_KEY = os.getenv("GEMINI_API_KEY", "")
@@ -371,7 +363,7 @@ async def upload_short(
     title: str,
     description: str,
     access_token: str
-) -> Optional[str]:
+) -> str | None:
     """
     ショート動画をYouTubeにアップロード
 
@@ -422,7 +414,7 @@ def _extract_segment_transcript(srt_path: str, start_sec: float, end_sec: float)
             log_warning(f"SRT file not found: {srt_path}")
             return ""
 
-        with open(srt_path, 'r', encoding='utf-8') as f:
+        with open(srt_path, encoding='utf-8') as f:
             content = f.read()
 
         # SRT形式のパース

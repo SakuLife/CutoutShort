@@ -1,8 +1,8 @@
 """Pydanticデータモデル定義"""
-from typing import Optional, Literal, Any
 from datetime import datetime
-from pydantic import BaseModel, Field, field_validator
+from typing import ClassVar, Literal
 
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 # ========== リクエストモデル ==========
 
@@ -28,32 +28,25 @@ class JobOptions(BaseModel):
 class CreateJobRequest(BaseModel):
     """ジョブ作成リクエスト"""
     source_type: Literal["drive", "youtube_url"] = Field(description="入力ソースタイプ")
-    drive_file_id: Optional[str] = Field(default=None, description="Driveファイル ID（source_type=driveの場合必須）")
-    youtube_url: Optional[str] = Field(default=None, description="YouTube URL（source_type=youtube_urlの場合必須）")
-    title_hint: Optional[str] = Field(default=None, description="動画タイトルヒント")
+    drive_file_id: str | None = Field(default=None, description="Driveファイル ID（source_type=driveの場合必須）")
+    youtube_url: str | None = Field(default=None, description="YouTube URL（source_type=youtube_urlの場合必須）")
+    title_hint: str | None = Field(default=None, description="動画タイトルヒント")
     options: JobOptions = Field(default_factory=JobOptions, description="ジョブオプション")
-    idempotency_key: Optional[str] = Field(default=None, description="冪等キー（同一キーは同一ジョブ扱い）")
+    idempotency_key: str | None = Field(default=None, description="冪等キー（同一キーは同一ジョブ扱い）")
 
-    @field_validator("drive_file_id")
-    @classmethod
-    def validate_drive_file_id(cls, v: Optional[str], info) -> Optional[str]:
-        """source_type=driveの場合はdrive_file_idが必須"""
-        if info.data.get("source_type") == "drive" and not v:
+    @model_validator(mode="after")
+    def validate_source_fields(self) -> "CreateJobRequest":
+        """source_typeに応じた必須フィールドを検証"""
+        if self.source_type == "drive" and not self.drive_file_id:
             raise ValueError("drive_file_id is required when source_type is 'drive'")
-        return v
-
-    @field_validator("youtube_url")
-    @classmethod
-    def validate_youtube_url(cls, v: Optional[str], info) -> Optional[str]:
-        """source_type=youtube_urlの場合はyoutube_urlが必須"""
-        if info.data.get("source_type") == "youtube_url" and not v:
+        if self.source_type == "youtube_url" and not self.youtube_url:
             raise ValueError("youtube_url is required when source_type is 'youtube_url'")
-        return v
+        return self
 
 
 class RetryJobRequest(BaseModel):
     """ジョブリトライリクエスト"""
-    options: Optional[JobOptions] = Field(default=None, description="上書きするオプション")
+    options: JobOptions | None = Field(default=None, description="上書きするオプション")
 
 
 # ========== レスポンスモデル ==========
@@ -103,7 +96,7 @@ class SegmentInfo(BaseModel):
     end: float = Field(description="終了時刻（秒）")
     score: float = Field(default=0.5, ge=0.0, le=1.0, description="スコア（0.0〜1.0）")
     method: Literal["llm", "rule"] = Field(description="抽出方法")
-    reason: Optional[str] = Field(default=None, description="選定理由")
+    reason: str | None = Field(default=None, description="選定理由")
 
 
 class TranscriptSegment(BaseModel):
@@ -115,8 +108,8 @@ class TranscriptSegment(BaseModel):
 
 class JobArtifacts(BaseModel):
     """ジョブ中間成果物"""
-    local_in: Optional[str] = Field(default=None, description="ローカル入力ファイルパス")
-    srt_path: Optional[str] = Field(default=None, description="SRTファイルパス")
+    local_in: str | None = Field(default=None, description="ローカル入力ファイルパス")
+    srt_path: str | None = Field(default=None, description="SRTファイルパス")
     transcript_json: list[TranscriptSegment] = Field(default_factory=list, description="文字起こしJSON")
     segments: list[SegmentInfo] = Field(default_factory=list, description="選定セグメント")
     rendered_files: list[str] = Field(default_factory=list, description="レンダリング済みファイルパス")
@@ -147,7 +140,7 @@ class Job(BaseModel):
     attempt: int = Field(default=1, ge=1, description="試行回数")
 
     class Config:
-        json_encoders = {
+        json_encoders: ClassVar[dict] = {
             datetime: lambda v: v.isoformat()
         }
 

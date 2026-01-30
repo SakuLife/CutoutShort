@@ -1,17 +1,16 @@
 """Google Sheets 記録機能 + YouTuber管理"""
-from typing import Dict, Any, Optional, List
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
+import gspread
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-import gspread
 
 from app.config import config
-from app.logging_utils import log_info, log_error, log_warning
+from app.logging_utils import log_error, log_info, log_warning
 from app.youtube_channel import YouTuberInfo
-
 
 # Google Sheets API のスコープ
 SCOPES = [
@@ -43,7 +42,7 @@ def get_sheets_service():
     return build('sheets', 'v4', credentials=credentials)
 
 
-def get_sheet(spreadsheet_id: Optional[str] = None, worksheet_name: str = "CutoutShort"):
+def get_sheet(spreadsheet_id: str | None = None, worksheet_name: str = "CutoutShort"):
     """
     gspread を使ってワークシートオブジェクトを取得
     
@@ -95,10 +94,10 @@ def get_sheet(spreadsheet_id: Optional[str] = None, worksheet_name: str = "Cutou
 
 
 def record_to_sheet(
-    data: Dict[str, Any],
-    spreadsheet_id: Optional[str] = None,
+    data: dict[str, Any],
+    spreadsheet_id: str | None = None,
     range_name: str = "CutoutShort!A:L"
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Googleスプレッドシートに記録を追加
 
@@ -171,9 +170,9 @@ def record_to_sheet(
 
 
 def initialize_sheet_headers(
-    spreadsheet_id: Optional[str] = None,
+    spreadsheet_id: str | None = None,
     range_name: str = "CutoutShort!A1:L1"
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     スプレッドシートにヘッダー行を作成
 
@@ -236,9 +235,9 @@ def initialize_sheet_headers(
 def update_status(
     youtube_url: str,
     new_status: str,
-    spreadsheet_id: Optional[str] = None,
+    spreadsheet_id: str | None = None,
     range_name: str = "CutoutShort!C:H"
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """
     YouTube URLを検索してステータスを更新
 
@@ -306,9 +305,9 @@ def update_status(
 # ===========================================
 
 def get_youtubers(
-    spreadsheet_id: Optional[str] = None,
+    spreadsheet_id: str | None = None,
     sheet_name: str = "YouTubers"
-) -> List[YouTuberInfo]:
+) -> list[YouTuberInfo]:
     """
     YouTubersシートから有効な契約者リストを取得
 
@@ -373,7 +372,7 @@ def get_youtubers(
 def update_youtuber_last_video(
     row_index: int,
     video_id: str,
-    spreadsheet_id: Optional[str] = None,
+    spreadsheet_id: str | None = None,
     sheet_name: str = "YouTubers"
 ) -> None:
     """
@@ -413,7 +412,7 @@ def record_upload(
     source_video_id: str,
     short_title: str,
     short_url: str,
-    spreadsheet_id: Optional[str] = None,
+    spreadsheet_id: str | None = None,
     sheet_name: str = "UploadLog"
 ) -> None:
     """
@@ -493,9 +492,9 @@ SHORTS_QUEUE_HEADERS = [
 
 def get_pending_shorts(
     channel_id: str,
-    spreadsheet_id: Optional[str] = None,
+    spreadsheet_id: str | None = None,
     sheet_name: str = "ShortsQueue"
-) -> List[dict]:
+) -> list[dict]:
     """
     未アップロードのショート動画を取得
 
@@ -554,8 +553,8 @@ def get_pending_shorts(
 
 
 def add_shorts_to_queue(
-    shorts: List[dict],
-    spreadsheet_id: Optional[str] = None,
+    shorts: list[dict],
+    spreadsheet_id: str | None = None,
     sheet_name: str = "ShortsQueue"
 ) -> int:
     """
@@ -623,7 +622,7 @@ def add_shorts_to_queue(
 def mark_short_uploaded(
     row_index: int,
     short_url: str,
-    spreadsheet_id: Optional[str] = None,
+    spreadsheet_id: str | None = None,
     sheet_name: str = "ShortsQueue"
 ) -> None:
     """
@@ -658,7 +657,7 @@ def mark_short_uploaded(
 
 def get_queue_stats(
     channel_id: str,
-    spreadsheet_id: Optional[str] = None,
+    spreadsheet_id: str | None = None,
     sheet_name: str = "ShortsQueue"
 ) -> dict:
     """

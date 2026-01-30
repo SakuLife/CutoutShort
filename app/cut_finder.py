@@ -1,12 +1,12 @@
 """切り出しセグメント抽出機能（LLM + 規則ベース）"""
 import json
 import subprocess
-from typing import Optional
+
 import google.generativeai as genai
 
 from app.config import config
-from app.logging_utils import log_info, log_error, log_warning
-from app.models import TranscriptSegment, SegmentInfo
+from app.logging_utils import log_error, log_info, log_warning
+from app.models import SegmentInfo, TranscriptSegment
 
 
 class CutFinderError(Exception):
@@ -20,9 +20,9 @@ def pick_segments(
     target_num: int = 5,
     min_sec: int = 25,
     max_sec: int = 45,
-    title_hint: Optional[str] = None,
+    title_hint: str | None = None,
     force_rule_based: bool = False,
-    job_id: Optional[str] = None
+    job_id: str | None = None
 ) -> list[SegmentInfo]:
     """
     文字起こしから切り出しセグメントを抽出
@@ -66,7 +66,10 @@ def pick_segments(
                     log_info(f"LLM extraction succeeded: {len(segments)} segments", job_id=job_id)
                     return segments
                 else:
-                    log_warning("LLM extraction returned insufficient segments, falling back to rule-based", job_id=job_id)
+                    log_warning(
+                        "LLM extraction returned insufficient segments, falling back to rule-based",
+                        job_id=job_id,
+                    )
 
             except Exception as e:
                 log_warning(f"LLM extraction failed: {e}, falling back to rule-based", job_id=job_id)
@@ -89,7 +92,7 @@ def pick_segments(
         raise CutFinderError(f"Segment extraction error: {e}") from e
 
 
-def _extract_json_from_response(content: str, job_id: Optional[str] = None) -> list | dict:
+def _extract_json_from_response(content: str, job_id: str | None = None) -> list | dict:
     """
     LLMレスポンスから堅牢にJSONを抽出してパース
 
@@ -105,8 +108,6 @@ def _extract_json_from_response(content: str, job_id: Optional[str] = None) -> l
         ValueError: 有効なJSONが見つからない場合
     """
     import re
-
-    original_content = content
 
     # 1. マークダウンコードブロックを除去
     if "```json" in content:
@@ -177,8 +178,8 @@ def _pick_segments_llm(
     target_num: int,
     min_sec: int,
     max_sec: int,
-    title_hint: Optional[str],
-    job_id: Optional[str]
+    title_hint: str | None,
+    job_id: str | None
 ) -> list[SegmentInfo]:
     """
     LLMを使用してセグメントを抽出
@@ -268,7 +269,8 @@ def _pick_segments_llm(
         # レスポンスが短すぎる場合は詳細をログ出力
         if len(content) < 200:
             log_warning(f"Response too short ({len(content)} chars). Full content: {content}", job_id=job_id)
-            log_warning(f"Response candidates: {response.candidates if hasattr(response, 'candidates') else 'N/A'}", job_id=job_id)
+            candidates_info = response.candidates if hasattr(response, 'candidates') else 'N/A'
+            log_warning(f"Response candidates: {candidates_info}", job_id=job_id)
             if hasattr(response, 'prompt_feedback'):
                 log_warning(f"Prompt feedback: {response.prompt_feedback}", job_id=job_id)
 
@@ -308,7 +310,7 @@ def _pick_segments_rule_based(
     target_num: int,
     min_sec: int,
     max_sec: int,
-    job_id: Optional[str]
+    job_id: str | None
 ) -> list[SegmentInfo]:
     """
     規則ベースでセグメントを抽出（フォールバック）
@@ -406,7 +408,7 @@ def _pick_segments_rule_based(
     return segments[:target_num]
 
 
-def _detect_silence(video_path: str, job_id: Optional[str] = None) -> list[float]:
+def _detect_silence(video_path: str, job_id: str | None = None) -> list[float]:
     """
     ffmpegのsilencedetectで無音区間を検出
 

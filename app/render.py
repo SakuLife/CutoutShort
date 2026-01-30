@@ -4,7 +4,6 @@ from __future__ import annotations
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from app.config import config
 from app.logging_utils import log_error, log_info
@@ -20,11 +19,11 @@ def render_clipset(
     in_mp4: str,
     srt_path: str,
     segments: list[SegmentInfo],
-    output_dir: Optional[str] = None,
-    job_id: Optional[str] = None,
-    title: Optional[str] = None,
-    bottom_text: Optional[str] = None,
-    top_text: Optional[str] = None,
+    output_dir: str | None = None,
+    job_id: str | None = None,
+    title: str | None = None,
+    bottom_text: str | None = None,
+    top_text: str | None = None,
 ) -> list[str]:
     """
     セグメントリストから複数のショート動画をレンダリングする.
@@ -82,10 +81,10 @@ def _render_single_clip(
     start: float,
     end: float,
     output_path: str,
-    job_id: Optional[str],
-    title: Optional[str] = None,
-    bottom_text: Optional[str] = None,
-    top_text: Optional[str] = None,
+    job_id: str | None,
+    title: str | None = None,
+    bottom_text: str | None = None,
+    top_text: str | None = None,
 ) -> None:
     """
     単一クリップをレンダリング（9:16 1080x1920、レターボックス、グローオーバーレイ付き）.

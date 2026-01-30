@@ -1,7 +1,7 @@
 """APIエンドポイントのテスト"""
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import Mock, patch
-from fastapi.testclient import TestClient
 
 
 class TestHealthEndpoints:
@@ -213,7 +213,11 @@ class TestJobStatus:
         assert status_response.status_code == 200
         data = status_response.json()
         assert data["job_id"] == job_id
-        assert data["status"] in ["queued", "downloading", "transcribing", "cut_selecting", "rendering", "uploading", "done"]
+        valid_statuses = [
+            "queued", "downloading", "transcribing",
+            "cut_selecting", "rendering", "uploading", "done",
+        ]
+        assert data["status"] in valid_statuses
         assert "progress" in data
         assert "trace_id" in data
 

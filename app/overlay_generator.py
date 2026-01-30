@@ -122,10 +122,8 @@ def generate_overlay_card(
     font_title = _load_font(keifont_path, 86)
     font_bottom = _load_font(keifont_path, 70)
 
-    rect_w, rect_h = 900, 720
-    rect_left = (width - rect_w) // 2
+    rect_h = 720
     rect_top = (height - rect_h) // 2
-    rect_right = rect_left + rect_w
     rect_bottom = rect_top + rect_h
     center_x = width / 2
     gap_small = 320  # 260から320に増やして上に配置

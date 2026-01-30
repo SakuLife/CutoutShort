@@ -1,14 +1,14 @@
 """Google Drive ダウンロード/アップロード機能"""
+import io
 import time
 from pathlib import Path
-from typing import Optional
+
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
-import io
 
 from app.config import config
-from app.logging_utils import log_info, log_error, log_warning
+from app.logging_utils import log_error, log_info, log_warning
 
 
 class DriveIOError(Exception):
@@ -32,7 +32,7 @@ def _get_drive_service():
 def download_from_drive(
     file_id: str,
     output_path: str,
-    job_id: Optional[str] = None
+    job_id: str | None = None
 ) -> str:
     """
     Google Driveからファイルをダウンロード
@@ -102,8 +102,8 @@ def download_from_drive(
 
 def upload_to_drive(
     local_path: str,
-    folder_id: Optional[str] = None,
-    job_id: Optional[str] = None
+    folder_id: str | None = None,
+    job_id: str | None = None
 ) -> str:
     """
     ファイルをGoogle Driveにアップロード
@@ -193,7 +193,7 @@ def upload_to_drive(
 
 def list_files_in_folder(
     folder_id: str,
-    job_id: Optional[str] = None
+    job_id: str | None = None
 ) -> list[dict]:
     """
     フォルダ内のファイル一覧を取得（デバッグ用）
@@ -222,7 +222,7 @@ def list_files_in_folder(
 def move_file_to_folder(
     file_id: str,
     folder_id: str,
-    job_id: Optional[str] = None
+    job_id: str | None = None
 ) -> None:
     """
     ファイルを別のフォルダに移動
@@ -257,7 +257,7 @@ def move_file_to_folder(
         raise DriveIOError(f"Failed to move file: {e}") from e
 
 
-def read_google_doc_content(doc_id: str, job_id: Optional[str] = None) -> str:
+def read_google_doc_content(doc_id: str, job_id: str | None = None) -> str:
     """
     Googleドキュメントの内容を読み取る
 
@@ -269,8 +269,8 @@ def read_google_doc_content(doc_id: str, job_id: Optional[str] = None) -> str:
         ドキュメントの内容（プレーンテキスト）
     """
     try:
-        from googleapiclient.discovery import build
         from google.oauth2 import service_account
+        from googleapiclient.discovery import build
         
         credentials = service_account.Credentials.from_service_account_file(
             config.GOOGLE_APPLICATION_CREDENTIALS,
@@ -297,7 +297,7 @@ def read_google_doc_content(doc_id: str, job_id: Optional[str] = None) -> str:
         return ""
 
 
-def get_video_folders_from_input(job_id: Optional[str] = None) -> list[dict]:
+def get_video_folders_from_input(job_id: str | None = None) -> list[dict]:
     """
     入力フォルダ内の動画フォルダ一覧を取得
 
@@ -318,7 +318,11 @@ def get_video_folders_from_input(job_id: Optional[str] = None) -> list[dict]:
         
         # 入力フォルダ内のフォルダ一覧を取得
         results = service.files().list(
-            q=f"'{config.DRIVE_INPUT_FOLDER_ID}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",
+            q=(
+                f"'{config.DRIVE_INPUT_FOLDER_ID}' in parents"
+                " and mimeType='application/vnd.google-apps.folder'"
+                " and trashed=false"
+            ),
             fields="files(id, name)",
             orderBy="createdTime desc"
         ).execute()

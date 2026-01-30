@@ -2,10 +2,9 @@
 import os
 import subprocess
 from pathlib import Path
-from typing import Optional
 
 from app.config import config
-from app.logging_utils import log_info, log_error, log_warning
+from app.logging_utils import log_error, log_info, log_warning
 
 
 class YtDlpError(Exception):
@@ -20,7 +19,7 @@ YOUTUBE_COOKIES_PATH = os.getenv("YOUTUBE_COOKIES_PATH", "")
 def download_youtube_video(
     url: str,
     output_path: str,
-    job_id: Optional[str] = None
+    job_id: str | None = None
 ) -> str:
     """
     YouTube動画をダウンロード
@@ -64,17 +63,17 @@ def download_youtube_video(
 
     try:
         log_info(
-            f"Running yt-dlp command",
+            "Running yt-dlp command",
             job_id=job_id,
             meta={"command": " ".join(cmd)}
         )
 
-        result = subprocess.run(
+        subprocess.run(
             cmd,
             capture_output=True,
             text=True,
             timeout=config.DOWNLOAD_TIMEOUT,
-            check=True
+            check=True,
         )
 
         log_info(f"YouTube download completed: {output_path}", job_id=job_id)
@@ -107,7 +106,7 @@ def download_youtube_video(
         raise YtDlpError(f"YouTube download error: {e}") from e
 
 
-def get_video_info(url: str, job_id: Optional[str] = None) -> dict:
+def get_video_info(url: str, job_id: str | None = None) -> dict:
     """
     YouTube動画の情報を取得（タイトル、長さなど）
 
@@ -156,7 +155,7 @@ def get_video_info(url: str, job_id: Optional[str] = None) -> dict:
         }
 
         log_info(
-            f"Video info retrieved",
+            "Video info retrieved",
             job_id=job_id,
             meta=video_info
         )
@@ -164,12 +163,12 @@ def get_video_info(url: str, job_id: Optional[str] = None) -> dict:
         return video_info
 
     except subprocess.TimeoutExpired as e:
-        log_error(f"get_video_info timeout", job_id=job_id, exc_info=True)
+        log_error("get_video_info timeout", job_id=job_id, exc_info=True)
         raise YtDlpError(f"Video info retrieval timeout: {e}") from e
 
     except subprocess.CalledProcessError as e:
         log_error(
-            f"get_video_info failed",
+            "get_video_info failed",
             job_id=job_id,
             meta={"stderr": e.stderr},
             exc_info=True

@@ -1,11 +1,11 @@
 """Whisper文字起こし機能"""
 import subprocess
 from pathlib import Path
-from typing import Optional
+
 from faster_whisper import WhisperModel
 
 from app.config import config
-from app.logging_utils import log_info, log_error, log_warning
+from app.logging_utils import log_error, log_info
 from app.models import TranscriptSegment
 
 
@@ -16,7 +16,7 @@ class TranscribeError(Exception):
 
 def transcribe_to_srt(
     in_mp4: str,
-    job_id: Optional[str] = None
+    job_id: str | None = None
 ) -> tuple[str, list[TranscriptSegment]]:
     """
     動画ファイルを文字起こしし、SRTファイルとtranscript JSONを生成
@@ -58,7 +58,7 @@ def transcribe_to_srt(
         )
 
         # 文字起こし実行
-        log_info(f"Running Whisper transcription...", job_id=job_id)
+        log_info("Running Whisper transcription...", job_id=job_id)
         segments, info = model.transcribe(
             in_mp4,
             language="ja",  # 日本語優先（自動検出も可）
@@ -67,7 +67,7 @@ def transcribe_to_srt(
         )
 
         log_info(
-            f"Transcription info",
+            "Transcription info",
             job_id=job_id,
             meta={
                 "language": info.language,
@@ -136,7 +136,7 @@ def _format_timestamp_srt(seconds: float) -> str:
     hours = int(seconds // 3600)
     minutes = int((seconds % 3600) // 60)
     secs = int(seconds % 60)
-    millis = int((seconds % 1) * 1000)
+    millis = round((seconds % 1) * 1000)
     return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
 
 

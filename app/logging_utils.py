@@ -2,13 +2,13 @@
 import json
 import logging
 import sys
-from datetime import datetime
-from typing import Optional, Any
-from contextvars import ContextVar
 import uuid
+from contextvars import ContextVar
+from datetime import datetime
+from typing import Any
 
 # トレースIDをコンテキスト変数で管理（非同期環境でも安全）
-trace_id_var: ContextVar[Optional[str]] = ContextVar("trace_id", default=None)
+trace_id_var: ContextVar[str | None] = ContextVar("trace_id", default=None)
 
 
 class JSONFormatter(logging.Formatter):
@@ -65,7 +65,7 @@ def setup_logging(level: str = "INFO") -> None:
     root_logger.addHandler(handler)
 
 
-def set_trace_id(trace_id: Optional[str] = None) -> str:
+def set_trace_id(trace_id: str | None = None) -> str:
     """トレースIDをセット（指定がなければ自動生成）"""
     if trace_id is None:
         trace_id = f"trace-{uuid.uuid4().hex[:12]}"
@@ -73,7 +73,7 @@ def set_trace_id(trace_id: Optional[str] = None) -> str:
     return trace_id
 
 
-def get_trace_id() -> Optional[str]:
+def get_trace_id() -> str | None:
     """現在のトレースIDを取得"""
     return trace_id_var.get()
 
@@ -86,9 +86,9 @@ def clear_trace_id() -> None:
 class LogContext:
     """ログコンテキストマネージャー（with文で使用）"""
 
-    def __init__(self, trace_id: Optional[str] = None):
+    def __init__(self, trace_id: str | None = None):
         self.trace_id = trace_id
-        self.previous_trace_id: Optional[str] = None
+        self.previous_trace_id: str | None = None
 
     def __enter__(self) -> str:
         """コンテキスト開始時にトレースIDをセット"""
@@ -106,9 +106,9 @@ class LogContext:
 def log_with_context(
     level: str,
     msg: str,
-    job_id: Optional[str] = None,
-    stage: Optional[str] = None,
-    meta: Optional[dict[str, Any]] = None,
+    job_id: str | None = None,
+    stage: str | None = None,
+    meta: dict[str, Any] | None = None,
 ) -> None:
     """コンテキスト情報付きでログ出力"""
     logger = logging.getLogger(__name__)
@@ -126,12 +126,23 @@ def log_with_context(
 
 
 # 便利な関数
-def log_info(msg: str, job_id: Optional[str] = None, stage: Optional[str] = None, meta: Optional[dict[str, Any]] = None) -> None:
+def log_info(
+    msg: str,
+    job_id: str | None = None,
+    stage: str | None = None,
+    meta: dict[str, Any] | None = None,
+) -> None:
     """INFOレベルでログ出力"""
     log_with_context("INFO", msg, job_id, stage, meta)
 
 
-def log_error(msg: str, job_id: Optional[str] = None, stage: Optional[str] = None, meta: Optional[dict[str, Any]] = None, exc_info: bool = False) -> None:
+def log_error(
+    msg: str,
+    job_id: str | None = None,
+    stage: str | None = None,
+    meta: dict[str, Any] | None = None,
+    exc_info: bool = False,
+) -> None:
     """ERRORレベルでログ出力"""
     logger = logging.getLogger(__name__)
     extra = {}
@@ -145,12 +156,22 @@ def log_error(msg: str, job_id: Optional[str] = None, stage: Optional[str] = Non
     logger.error(msg, extra=extra, exc_info=exc_info)
 
 
-def log_warning(msg: str, job_id: Optional[str] = None, stage: Optional[str] = None, meta: Optional[dict[str, Any]] = None) -> None:
+def log_warning(
+    msg: str,
+    job_id: str | None = None,
+    stage: str | None = None,
+    meta: dict[str, Any] | None = None,
+) -> None:
     """WARNINGレベルでログ出力"""
     log_with_context("WARNING", msg, job_id, stage, meta)
 
 
-def log_debug(msg: str, job_id: Optional[str] = None, stage: Optional[str] = None, meta: Optional[dict[str, Any]] = None) -> None:
+def log_debug(
+    msg: str,
+    job_id: str | None = None,
+    stage: str | None = None,
+    meta: dict[str, Any] | None = None,
+) -> None:
     """DEBUGレベルでログ出力"""
     log_with_context("DEBUG", msg, job_id, stage, meta)
 

@@ -1,15 +1,12 @@
 """ジョブ実行ワーカー"""
-import asyncio
-import uuid
+import re
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
+from app import content_generator, cut_finder, drive_io, render, transcribe, yt
 from app.config import config
-from app.logging_utils import log_info, log_error, log_warning, set_trace_id
-from app.models import Job, CreateJobRequest, OutputInfo, JobArtifacts, SegmentInfo
-from app import drive_io, yt, transcribe, cut_finder, render, content_generator
-import re
+from app.logging_utils import log_error, log_info, log_warning, set_trace_id
+from app.models import CreateJobRequest, Job, OutputInfo, SegmentInfo
 
 
 async def run_job(
@@ -26,7 +23,7 @@ async def run_job(
         jobs_store: ジョブストア（辞書）
     """
     # トレースIDをセット
-    trace_id = set_trace_id(f"trace-{job_id[:12]}")
+    set_trace_id(f"trace-{job_id[:12]}")
 
     # ジョブを取得
     job = jobs_store.get(job_id)
@@ -35,7 +32,7 @@ async def run_job(
         return
 
     try:
-        log_info(f"Job started", job_id=job_id, stage="queued")
+        log_info("Job started", job_id=job_id, stage="queued")
 
         # フェーズ1: ダウンロード
         await _phase_download(job, jobs_store)
@@ -61,7 +58,7 @@ async def run_job(
         jobs_store[job_id] = job
 
         log_info(
-            f"Job completed successfully",
+            "Job completed successfully",
             job_id=job_id,
             stage="done",
             meta={"output_count": len(job.outputs)}
@@ -71,7 +68,7 @@ async def run_job(
         log_error(f"Job failed: {e}", job_id=job_id, exc_info=True)
 
         job.status = "error"
-        job.message = f"Error: {str(e)}"
+        job.message = f"Error: {e!s}"
         job.updated_at = datetime.utcnow()
         jobs_store[job_id] = job
 
@@ -451,7 +448,7 @@ def cleanup_job_files(job: Job) -> None:
         for rendered_file in job.artifacts.rendered_files:
             Path(rendered_file).unlink(missing_ok=True)
 
-        log_info(f"Cleaned up job files", job_id=job.job_id)
+        log_info("Cleaned up job files", job_id=job.job_id)
 
     except Exception as e:
         log_warning(f"Cleanup failed: {e}", job_id=job.job_id)

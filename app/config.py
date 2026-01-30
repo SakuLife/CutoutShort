@@ -1,7 +1,7 @@
 """環境変数管理モジュール"""
 import os
-from typing import Optional
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 # .envファイルを読み込む
@@ -15,7 +15,7 @@ class Config:
     MAKE_SHARED_SECRET: str = os.getenv("MAKE_SHARED_SECRET", "")
 
     # Google Drive設定
-    GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    GOOGLE_APPLICATION_CREDENTIALS: str | None = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
     DRIVE_INPUT_FOLDER_ID: str = os.getenv("DRIVE_INPUT_FOLDER_ID", "")
     DRIVE_READY_FOLDER_ID: str = os.getenv("DRIVE_READY_FOLDER_ID", "")
     DRIVE_OUTPUT_FOLDER_ID: str = os.getenv("DRIVE_OUTPUT_FOLDER_ID", "")
@@ -26,11 +26,11 @@ class Config:
     WHISPER_COMPUTE_TYPE: str = os.getenv("WHISPER_COMPUTE_TYPE", "int8")  # int8|float16|float32
 
     # LLM設定（任意）
-    GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY")
+    GEMINI_API_KEY: str | None = os.getenv("GEMINI_API_KEY")
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash-latest")
 
     # Google Sheets設定
-    SPREADSHEET_ID: Optional[str] = os.getenv("SPREADSHEET_ID")
+    SPREADSHEET_ID: str | None = os.getenv("SPREADSHEET_ID")
     SHEET_YOUTUBERS: str = os.getenv("SHEET_YOUTUBERS", "YouTubers")
     SHEET_UPLOAD_LOG: str = os.getenv("SHEET_UPLOAD_LOG", "UploadLog")
 

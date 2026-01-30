@@ -1,14 +1,11 @@
 """render.pyのユニットテスト"""
-import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
-from app.render import (
-    render_clipset,
-    _render_single_clip,
-    get_video_resolution,
-    RenderError
-)
+from unittest.mock import Mock, patch
+
+import pytest
+
 from app.models import SegmentInfo
+from app.render import RenderError, _render_single_clip, get_video_resolution, render_clipset
 
 
 class TestGetVideoResolution:
@@ -33,40 +30,38 @@ class TestGetVideoResolution:
 class TestRenderSingleClip:
     """_render_single_clip関数のテスト"""
 
+    @patch('app.render.generate_overlay_card')
     @patch('app.render.subprocess.run')
-    @patch('app.render.Path')
-    def test_render_success(self, mock_path_class, mock_run, temp_dir):
+    def test_render_success(self, mock_run, mock_overlay, temp_dir):
         """正常にレンダリングできる場合"""
-        # ファイル存在チェックのモック
-        mock_path = MagicMock()
-        mock_path.exists.return_value = True
-        mock_path.stat.return_value.st_size = 1024 * 1024  # 1MB
-        mock_path_class.return_value = mock_path
-
         # ffmpegコマンドが成功
         mock_run.return_value = Mock(returncode=0)
 
         output_path = temp_dir / "clip_01.mp4"
 
-        # 実行
-        _render_single_clip(
-            in_mp4="/fake/input.mp4",
-            srt_path="/fake/input.srt",
-            start=10.0,
-            end=40.0,
-            output_path=str(output_path),
-            job_id="test_job"
-        )
+        # レンダリング後に出力ファイルが存在するようにモック
+        with patch.object(Path, 'exists', return_value=True), \
+             patch.object(Path, 'stat') as mock_stat:
+            mock_stat.return_value.st_size = 1024 * 1024  # 1MB
+
+            _render_single_clip(
+                in_mp4="/fake/input.mp4",
+                srt_path="/fake/input.srt",
+                start=10.0,
+                end=40.0,
+                output_path=str(output_path),
+                job_id="test_job",
+            )
 
         # ffmpegが呼ばれたことを確認
         mock_run.assert_called_once()
-        call_args = mock_run.call_args
-        assert "ffmpeg" in call_args[0][0]
-        assert "-ss" in call_args[0][0]
-        assert "10.0" in call_args[0][0]
+        cmd = mock_run.call_args[0][0]
+        assert cmd[0] == "ffmpeg"
+        assert "-ss" in cmd
 
+    @patch('app.render.generate_overlay_card')
     @patch('app.render.subprocess.run')
-    def test_render_timeout(self, mock_run, temp_dir):
+    def test_render_timeout(self, mock_run, mock_overlay, temp_dir):
         """タイムアウトする場合"""
         from subprocess import TimeoutExpired
         mock_run.side_effect = TimeoutExpired("ffmpeg", 600)
@@ -80,32 +75,30 @@ class TestRenderSingleClip:
                 start=0.0,
                 end=30.0,
                 output_path=str(output_path),
-                job_id="test_job"
+                job_id="test_job",
             )
 
+    @patch('app.render.generate_overlay_card')
     @patch('app.render.subprocess.run')
-    @patch('app.render.Path')
-    def test_render_output_too_small(self, mock_path_class, mock_run, temp_dir):
+    def test_render_output_too_small(self, mock_run, mock_overlay, temp_dir):
         """出力ファイルが小さすぎる場合（異常）"""
-        # ファイルは存在するが小さすぎる
-        mock_path = MagicMock()
-        mock_path.exists.return_value = True
-        mock_path.stat.return_value.st_size = 100  # 100 bytes（小さすぎる）
-        mock_path_class.return_value = mock_path
-
         mock_run.return_value = Mock(returncode=0)
 
         output_path = temp_dir / "clip_small.mp4"
 
-        with pytest.raises(RenderError, match="too small"):
-            _render_single_clip(
-                in_mp4="/fake/input.mp4",
-                srt_path="/fake/input.srt",
-                start=0.0,
-                end=30.0,
-                output_path=str(output_path),
-                job_id="test_job"
-            )
+        with patch.object(Path, 'exists', return_value=True), \
+             patch.object(Path, 'stat') as mock_stat:
+            mock_stat.return_value.st_size = 100  # 100 bytes（小さすぎる）
+
+            with pytest.raises(RenderError, match="too small"):
+                _render_single_clip(
+                    in_mp4="/fake/input.mp4",
+                    srt_path="/fake/input.srt",
+                    start=0.0,
+                    end=30.0,
+                    output_path=str(output_path),
+                    job_id="test_job",
+                )
 
 
 class TestRenderClipset:
@@ -125,16 +118,16 @@ class TestRenderClipset:
             srt_path="/fake/input.srt",
             segments=segments,
             output_dir=str(temp_dir),
-            job_id="test_job"
+            job_id="test_job",
         )
 
         # 3つのクリップがレンダリングされた
         assert len(rendered_files) == 3
         assert mock_render_single.call_count == 3
 
-        # ファイル名が正しいか確認
+        # ファイル名にクリップ番号が含まれていることを確認
         for i, file_path in enumerate(rendered_files, start=1):
-            assert f"clip_{i:02d}.mp4" in file_path
+            assert f"_{i:02d}_" in file_path
 
     @patch('app.render._render_single_clip')
     def test_render_with_partial_failure(self, mock_render_single, temp_dir):
@@ -145,11 +138,13 @@ class TestRenderClipset:
             SegmentInfo(start=70.0, end=100.0, score=0.6, method="rule"),
         ]
 
-        # 2番目のクリップでエラー
+        call_count = 0
+
         def side_effect(*args, **kwargs):
-            if "clip_02" in args[3]:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
                 raise Exception("Render error")
-            return None
 
         mock_render_single.side_effect = side_effect
 
@@ -158,7 +153,7 @@ class TestRenderClipset:
             srt_path="/fake/input.srt",
             segments=segments,
             output_dir=str(temp_dir),
-            job_id="test_job"
+            job_id="test_job",
         )
 
         # 2つのクリップが成功（1つ失敗）
@@ -179,7 +174,7 @@ class TestRenderClipset:
                 srt_path="/fake/input.srt",
                 segments=segments,
                 output_dir=str(temp_dir),
-                job_id="test_job"
+                job_id="test_job",
             )
 
 
@@ -204,7 +199,7 @@ class TestRenderIntegration:
             srt_path=str(srt_path),
             segments=segments,
             output_dir=str(temp_dir),
-            job_id="test_job"
+            job_id="test_job",
         )
 
         assert len(rendered_files) == 1

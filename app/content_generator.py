@@ -1,15 +1,14 @@
 """YouTubeタイトル・説明文生成モジュール"""
 import json
 import re
-from typing import Optional, Dict
 
 import google.generativeai as genai
 
 from app.config import config
-from app.logging_utils import log_info, log_warning, log_error
+from app.logging_utils import log_error, log_info, log_warning
 
 
-def _extract_json_from_content(content: str) -> Dict:
+def _extract_json_from_content(content: str) -> dict:
     """
     Geminiレスポンスから堅牢にJSONを抽出してパース
 
@@ -77,9 +76,9 @@ def _extract_json_from_content(content: str) -> Dict:
 
 def generate_title_and_description(
     transcript_text: str,
-    source_url: Optional[str] = None,
+    source_url: str | None = None,
     fallback_title: str = "ショート動画"
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """
     Gemini APIを使ってタイトルと説明文を生成
 
@@ -103,7 +102,7 @@ def generate_title_and_description(
     return _generate_fallback(transcript_text, source_url, fallback_title)
 
 
-def _generate_with_gemini(transcript_text: str, source_url: Optional[str], fallback_title: str) -> Dict[str, str]:
+def _generate_with_gemini(transcript_text: str, source_url: str | None, fallback_title: str) -> dict[str, str]:
     """Gemini APIでタイトルと説明文を生成"""
 
     log_info("Generating title and description with Gemini API")
@@ -201,7 +200,9 @@ JSON形式のみで回答してください。"""
 
         # titleまたはdescriptionが空の場合はフォールバックを使用
         if not title or not description:
-            log_warning(f"Incomplete Gemini response (title: {bool(title)}, description: {bool(description)}), using fallback")
+            log_warning(
+                f"Incomplete Gemini response (title: {bool(title)}, desc: {bool(description)}), using fallback"
+            )
             fallback_result = _generate_fallback(transcript_text, source_url, fallback_title)
 
             # 空のフィールドをフォールバックで補完
@@ -233,9 +234,9 @@ JSON形式のみで回答してください。"""
 
 def _generate_fallback(
     transcript_text: str,
-    source_url: Optional[str],
+    source_url: str | None,
     fallback_title: str
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """ルールベースでタイトルと説明文を生成（フォールバック）"""
 
     log_info("Generating title and description with rule-based fallback")

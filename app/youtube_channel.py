@@ -1,13 +1,10 @@
 """YouTubeチャンネル操作モジュール - 最新動画取得・トークン管理"""
 
-import json
-from typing import Optional
 from dataclasses import dataclass
 
 import requests
 
-from app.config import config
-from app.logging_utils import log_info, log_error
+from app.logging_utils import log_error, log_info
 
 
 @dataclass
@@ -18,7 +15,7 @@ class VideoInfo:
     description: str
     thumbnail_url: str
     published_at: str
-    duration_seconds: Optional[int] = None
+    duration_seconds: int | None = None
 
 
 @dataclass
@@ -27,8 +24,8 @@ class YouTuberInfo:
     name: str
     channel_id: str
     enabled: bool
-    last_video_id: Optional[str]
-    last_processed_date: Optional[str]
+    last_video_id: str | None
+    last_processed_date: str | None
     refresh_token: str
     row_index: int  # スプシの行番号（更新用）
 
@@ -38,7 +35,7 @@ class YouTubeChannelError(Exception):
     pass
 
 
-def get_latest_video(channel_id: str, api_key: str) -> Optional[VideoInfo]:
+def get_latest_video(channel_id: str, api_key: str) -> VideoInfo | None:
     """
     チャンネルの最新動画を取得
 
@@ -99,7 +96,7 @@ def get_latest_video(channel_id: str, api_key: str) -> Optional[VideoInfo]:
         return None
 
 
-def _get_uploads_playlist_id(channel_id: str, api_key: str) -> Optional[str]:
+def _get_uploads_playlist_id(channel_id: str, api_key: str) -> str | None:
     """チャンネルのuploadsプレイリストIDを取得"""
     url = "https://www.googleapis.com/youtube/v3/channels"
     params = {
@@ -131,7 +128,7 @@ def _get_best_thumbnail(thumbnails: dict) -> str:
     return ""
 
 
-def refresh_access_token(refresh_token: str, client_id: str, client_secret: str) -> Optional[str]:
+def refresh_access_token(refresh_token: str, client_id: str, client_secret: str) -> str | None:
     """
     リフレッシュトークンからアクセストークンを取得
 
@@ -195,6 +192,6 @@ def download_thumbnail(thumbnail_url: str, output_path: str) -> bool:
         log_info(f"Thumbnail downloaded: {output_path}")
         return True
 
-    except (requests.RequestException, IOError) as e:
+    except (OSError, requests.RequestException) as e:
         log_error(f"Failed to download thumbnail: {e}")
         return False

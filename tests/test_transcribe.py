@@ -1,13 +1,15 @@
 """transcribe.pyのユニットテスト"""
-import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
+
 from app.transcribe import (
-    transcribe_to_srt,
     TranscribeError,
-    _format_timestamp_srt,
     _format_subtitle_text,
-    get_video_duration
+    _format_timestamp_srt,
+    get_video_duration,
+    transcribe_to_srt,
 )
 
 
