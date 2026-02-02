@@ -1,14 +1,27 @@
 FROM python:3.11-slim
 
-# システムパッケージをインストール
+# システムパッケージをインストール（日本語フォント含む）
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     wget \
+    curl \
+    unzip \
+    fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
 
-# yt-dlpをインストール
+# yt-dlpをインストール（最新版）
 RUN wget -O /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp && \
     chmod a+rx /usr/local/bin/yt-dlp
+
+# Deno（yt-dlp 2025.11以降でYouTube JSチャレンジ解決に必須）
+RUN curl -fsSL https://deno.land/install.sh | sh
+ENV DENO_DIR="/root/.cache/deno"
+ENV PATH="/root/.deno/bin:$PATH"
+
+# PO Token Provider (Rust版バイナリ) - Bot検出回避用
+RUN wget -O /usr/local/bin/bgutil-pot \
+    https://github.com/jim60105/bgutil-ytdlp-pot-provider-rs/releases/latest/download/bgutil-pot-linux-x86_64 && \
+    chmod a+rx /usr/local/bin/bgutil-pot
 
 # 作業ディレクトリを設定
 WORKDIR /app
@@ -20,16 +33,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # アプリケーションコードをコピー
 COPY . .
 
+# エントリーポイント
+RUN chmod +x /app/entrypoint.sh
+
 # 環境変数
 ENV PYTHONUNBUFFERED=1
 ENV TMP_DIR=/tmp
 
-# ポート公開
-EXPOSE 8080
-
-# ヘルスチェック
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"
-
-# アプリケーション起動
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Cloud Run Jobs: PO Tokenサーバー起動後にスケジューラー実行
+CMD ["/app/entrypoint.sh"]

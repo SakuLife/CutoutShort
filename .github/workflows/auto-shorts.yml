@@ -30,6 +30,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y fonts-noto-cjk
 
+      - name: Install Deno
+        run: |
+          curl -fsSL https://deno.land/install.sh | sh
+          echo "$HOME/.deno/bin" >> $GITHUB_PATH
+
+      - name: Install PO Token Server
+        run: |
+          sudo wget -O /usr/local/bin/bgutil-pot \
+            https://github.com/jim60105/bgutil-ytdlp-pot-provider-rs/releases/latest/download/bgutil-pot-linux-x86_64
+          sudo chmod +x /usr/local/bin/bgutil-pot
+
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
@@ -162,11 +173,24 @@ jobs:
             echo "No YouTube cookies configured (YOUTUBE_COOKIES secret not set)"
           fi
 
+      - name: Start PO Token Server
+        run: |
+          bgutil-pot server --host 127.0.0.1 --port 4416 &
+          echo "Waiting for PO Token Server..."
+          for i in $(seq 1 30); do
+            if curl -s http://127.0.0.1:4416/ping > /dev/null 2>&1; then
+              echo "PO Token Server is ready!"
+              break
+            fi
+            sleep 1
+          done
+
       - name: Run Multi-YouTuber scheduler
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/service-account.json
           YOUTUBE_COOKIES_PATH: ${{ github.workspace }}/youtube_cookies.txt
           YT_DLP_PROXY: ${{ secrets.YT_DLP_PROXY }}
+          POT_SERVER_BASE_URL: http://127.0.0.1:4416
         run: python -m app.multi_scheduler
 
       - name: Upload generated shorts

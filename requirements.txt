@@ -19,7 +19,8 @@ openai-whisper==20240930
 google-generativeai==0.8.3
 
 # Video Processing
-yt-dlp>=2025.1.0
+yt-dlp[default]>=2025.11.12
+bgutil-ytdlp-pot-provider>=0.7.0
 Pillow==11.0.0
 
 # Utilities

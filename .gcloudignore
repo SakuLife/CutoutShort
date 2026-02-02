@@ -1,0 +1,52 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+.venv
+.env
+
+# IDE
+.vscode
+.idea
+
+# テスト・開発用
+tests/
+pytest.ini
+pyproject.toml
+.ruff_cache
+test_*.py
+
+# 画像・スクリーンショット（開発用）
+*.png
+
+# 動画・音声・字幕（開発用テストデータ）
+*.mp4
+*.srt
+*.mp3
+*.wav
+*.ttf
+
+# 一時ファイル・Windowsの予約名
+nul
+trash_backup_py_*/
+
+# ドキュメント
+CLAUDE.md
+*.md
+
+# GitHub Actions
+.github/
+
+# Claude設定
+.claude/
+
+# ビルド・デプロイスクリプト
+build.bat
+deploy.sh
+Dockerfile.dev
+
+# サービスアカウントキー（service-account.jsonのみ除外）
+service-account.json
