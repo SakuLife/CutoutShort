@@ -23,6 +23,11 @@ RUN wget -O /usr/local/bin/bgutil-pot \
     https://github.com/jim60105/bgutil-ytdlp-pot-provider-rs/releases/latest/download/bgutil-pot-linux-x86_64 && \
     chmod a+rx /usr/local/bin/bgutil-pot
 
+# PO Token yt-dlpプラグイン（Rust版zip）- pip版（Brainicism）とは互換性なし
+RUN mkdir -p /root/.yt-dlp/plugins && \
+    wget -O /root/.yt-dlp/plugins/bgutil-ytdlp-pot-provider-rs.zip \
+    https://github.com/jim60105/bgutil-ytdlp-pot-provider-rs/releases/latest/download/bgutil-ytdlp-pot-provider-rs.zip
+
 # 作業ディレクトリを設定
 WORKDIR /app
 

@@ -158,6 +158,13 @@ def download_youtube_video(
     except subprocess.CalledProcessError as e:
         stderr = e.stderr or ""
 
+        # 初回失敗の詳細をログ（PO Token診断用）
+        log_warning(
+            f"yt-dlp initial attempt failed (rc={e.returncode})",
+            job_id=job_id,
+            meta={"stderr_head": stderr[:500]},
+        )
+
         # Bot検出時のリトライ
         if "Sign in to confirm" in stderr or "bot" in stderr.lower():
             result = _retry_bot_detected(url, output_path, job_id)

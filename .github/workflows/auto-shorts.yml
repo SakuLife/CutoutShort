@@ -35,11 +35,15 @@ jobs:
           curl -fsSL https://deno.land/install.sh | sh
           echo "$HOME/.deno/bin" >> $GITHUB_PATH
 
-      - name: Install PO Token Server
+      - name: Install PO Token Server + Plugin
         run: |
           sudo wget -O /usr/local/bin/bgutil-pot \
             https://github.com/jim60105/bgutil-ytdlp-pot-provider-rs/releases/latest/download/bgutil-pot-linux-x86_64
           sudo chmod +x /usr/local/bin/bgutil-pot
+          mkdir -p ~/.yt-dlp/plugins
+          wget -O ~/.yt-dlp/plugins/bgutil-ytdlp-pot-provider-rs.zip \
+            https://github.com/jim60105/bgutil-ytdlp-pot-provider-rs/releases/latest/download/bgutil-ytdlp-pot-provider-rs.zip
+          echo "PO Token plugin installed to ~/.yt-dlp/plugins/"
 
       - name: Install Python dependencies
         run: |
@@ -184,6 +188,15 @@ jobs:
             fi
             sleep 1
           done
+
+      - name: Verify PO Token setup
+        run: |
+          echo "=== yt-dlp version ==="
+          yt-dlp --version
+          echo "=== Plugin directory ==="
+          ls -la ~/.yt-dlp/plugins/ || echo "No plugin dir"
+          echo "=== PO Token Server health ==="
+          curl -s http://127.0.0.1:4416/ping && echo " OK" || echo " FAILED"
 
       - name: Run Multi-YouTuber scheduler
         env:
