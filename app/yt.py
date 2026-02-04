@@ -63,9 +63,10 @@ def _add_auth_args(cmd: list[str], job_id: str | None = None) -> None:
 
     # 優先度1: PO Token Server（自動リフレッシュ、推奨）
     if _check_pot_server():
+        # jim60105/bgutil-ytdlp-pot-provider-rs 用の正しいextractor-args形式
         cmd.extend([
             "--extractor-args",
-            f"youtubepot-bgutilhttp:base_url={POT_SERVER_BASE_URL}",
+            f"youtubepot-bgutil:getpot_bgutil_baseurl={POT_SERVER_BASE_URL}",
         ])
         log_info(f"Using PO Token Server at {POT_SERVER_BASE_URL}", job_id=job_id)
         return

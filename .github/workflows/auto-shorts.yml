@@ -37,13 +37,19 @@ jobs:
 
       - name: Install PO Token Server + Plugin
         run: |
+          # PO Token Server (bgutil-pot)
           sudo wget -O /usr/local/bin/bgutil-pot \
             https://github.com/jim60105/bgutil-ytdlp-pot-provider-rs/releases/latest/download/bgutil-pot-linux-x86_64
           sudo chmod +x /usr/local/bin/bgutil-pot
+
+          # yt-dlp Plugin（zipを解凍して配置）
           mkdir -p ~/.yt-dlp/plugins
-          wget -O ~/.yt-dlp/plugins/bgutil-ytdlp-pot-provider-rs.zip \
-            https://github.com/jim60105/bgutil-ytdlp-pot-provider-rs/releases/latest/download/bgutil-ytdlp-pot-provider-rs.zip
-          echo "PO Token plugin installed to ~/.yt-dlp/plugins/"
+          cd ~/.yt-dlp/plugins
+          wget -q https://github.com/jim60105/bgutil-ytdlp-pot-provider-rs/releases/latest/download/bgutil-ytdlp-pot-provider-rs.zip
+          unzip -o bgutil-ytdlp-pot-provider-rs.zip
+          rm bgutil-ytdlp-pot-provider-rs.zip
+          echo "PO Token plugin installed:"
+          ls -la ~/.yt-dlp/plugins/
 
       - name: Install Python dependencies
         run: |
@@ -195,6 +201,8 @@ jobs:
           yt-dlp --version
           echo "=== Plugin directory ==="
           ls -la ~/.yt-dlp/plugins/ || echo "No plugin dir"
+          echo "=== yt-dlp recognizes PO Token plugin? ==="
+          yt-dlp --list-extractors 2>/dev/null | grep -i pot || echo "Plugin not found in extractors"
           echo "=== PO Token Server health ==="
           curl -s http://127.0.0.1:4416/ping && echo " OK" || echo " FAILED"
 
@@ -204,6 +212,7 @@ jobs:
           YOUTUBE_COOKIES_PATH: ${{ github.workspace }}/youtube_cookies.txt
           YT_DLP_PROXY: ${{ secrets.YT_DLP_PROXY }}
           POT_SERVER_BASE_URL: http://127.0.0.1:4416
+          GETPOT_BGUTIL_BASEURL: http://127.0.0.1:4416
         run: python -m app.multi_scheduler
 
       - name: Upload generated shorts
