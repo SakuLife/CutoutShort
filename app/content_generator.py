@@ -159,7 +159,7 @@ JSON形式のみで回答してください。"""
         safety_settings=safety_settings,
         generation_config={
             "temperature": 0.7,
-            "max_output_tokens": 500,  # 300から500に増やす
+            "max_output_tokens": 1000,  # 500→1000に増やす（MAX_TOKENS対策）
         }
     )
 

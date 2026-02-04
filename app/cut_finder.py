@@ -428,7 +428,9 @@ def _detect_silence(video_path: str, job_id: str | None = None) -> list[float]:
             cmd,
             capture_output=True,
             text=True,
-            timeout=60
+            encoding='utf-8',
+            errors='replace',
+            timeout=180  # 長い動画対応のため60→180秒に延長
         )
 
         # stderrから無音終了時刻を抽出

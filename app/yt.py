@@ -189,7 +189,39 @@ def _retry_bot_detected(
 ) -> str | None:
     """Bot検出時のリトライ処理"""
 
-    # player_clientフォールバック
+    # 優先度1: Cookiesでリトライ（設定されている場合）
+    if YOUTUBE_COOKIES_PATH and Path(YOUTUBE_COOKIES_PATH).exists():
+        log_warning(
+            f"Bot detected, retrying with cookies: {YOUTUBE_COOKIES_PATH}",
+            job_id=job_id,
+        )
+        retry_cmd = _build_base_cmd()
+        retry_cmd.extend(_build_download_args(output_path, url))
+        retry_cmd.extend(["--cookies", YOUTUBE_COOKIES_PATH])
+        retry_cmd.append(url)
+
+        try:
+            subprocess.run(
+                retry_cmd,
+                capture_output=True,
+                text=True,
+                timeout=config.DOWNLOAD_TIMEOUT,
+                check=True,
+            )
+            if Path(output_path).exists():
+                log_info(
+                    f"Retry with cookies succeeded: {output_path}",
+                    job_id=job_id,
+                )
+                return output_path
+        except subprocess.CalledProcessError as retry_e:
+            log_warning(
+                "Retry with cookies also failed",
+                job_id=job_id,
+                meta={"stderr": (retry_e.stderr or "")[:200]},
+            )
+
+    # 優先度2: player_clientフォールバック
     fallback_clients = [
         "web_embedded,web_safari",
         "tv_embedded",
