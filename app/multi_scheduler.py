@@ -102,22 +102,6 @@ async def process_youtuber(youtuber: YouTuberInfo):
     """
     log_info(f"Processing YouTuber: {youtuber.name} ({youtuber.channel_id})")
 
-    # キューの状態を確認
-    stats = get_queue_stats(youtuber.channel_id)
-    log_info(f"Queue stats: pending={stats['pending']}, uploaded={stats['uploaded']}")
-
-    # 1. キューにpendingがあるか確認
-    pending_shorts = get_pending_shorts(youtuber.channel_id)
-
-    if pending_shorts:
-        log_info(f"Found {len(pending_shorts)} pending shorts in queue")
-        # キューから1本アップロード
-        await upload_from_queue(youtuber, pending_shorts[0])
-        return
-
-    # 2. キューが空なら新しい動画を処理
-    log_info("No pending shorts, checking for new video...")
-
     # 最新動画を取得
     latest_video = get_latest_video(youtuber.channel_id, YOUTUBE_API_KEY)
 
@@ -132,7 +116,7 @@ async def process_youtuber(youtuber: YouTuberInfo):
         log_info(f"Video already processed: {latest_video.video_id}")
         return
 
-    # 3. 動画からショート候補を生成
+    # 1. 動画からショート候補を生成
     shorts_candidates = await create_shorts_from_video(
         video_info=latest_video,
         youtuber=youtuber
@@ -144,7 +128,7 @@ async def process_youtuber(youtuber: YouTuberInfo):
         # → 次回再試行される
         return
 
-    # 4. スコア閾値以上のものをフィルタ
+    # 2. スコア閾値以上のものをフィルタ
     qualified_shorts = [s for s in shorts_candidates if s['score'] >= SCORE_THRESHOLD]
 
     log_info(f"Qualified shorts (score >= {SCORE_THRESHOLD}): {len(qualified_shorts)}/{len(shorts_candidates)}")
@@ -157,17 +141,48 @@ async def process_youtuber(youtuber: YouTuberInfo):
         )
         return
 
-    # 5. キューに追加
-    add_shorts_to_queue(qualified_shorts)
+    # 3. 最高スコアのショートを即アップロード（キューを使わない）
+    best_short = qualified_shorts[0]  # スコア順にソート済み
+    log_info(f"Uploading best short immediately: {best_short['title']} (score: {best_short['score']})")
 
-    # 6. 最終処理動画IDを更新
-    update_youtuber_last_video(
-        row_index=youtuber.row_index,
-        video_id=latest_video.video_id
+    # アクセストークンを取得
+    access_token = refresh_access_token(
+        youtuber.refresh_token,
+        YOUTUBE_CLIENT_ID,
+        YOUTUBE_CLIENT_SECRET
     )
 
-    # 7. 1本アップロード
-    await upload_from_queue(youtuber, qualified_shorts[0])
+    if not access_token:
+        log_error(f"Failed to get access token for {youtuber.name}")
+        return
+
+    # アップロード実行
+    short_url = await upload_short(
+        video_path=best_short['file_path'],
+        title=best_short['title'],
+        description=best_short['description'],
+        access_token=access_token
+    )
+
+    if short_url:
+        log_info(f"Upload success: {short_url}")
+
+        # UploadLogに記録
+        record_upload(
+            youtuber_name=youtuber.name,
+            channel_id=youtuber.channel_id,
+            source_video_id=best_short['source_video_id'],
+            short_title=best_short['title'],
+            short_url=short_url
+        )
+
+        # 最終処理動画IDを更新
+        update_youtuber_last_video(
+            row_index=youtuber.row_index,
+            video_id=latest_video.video_id
+        )
+    else:
+        log_error(f"Upload failed for {best_short['title']}")
 
 
 async def upload_from_queue(youtuber: YouTuberInfo, short: dict) -> bool:
