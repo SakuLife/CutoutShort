@@ -54,8 +54,12 @@ async def main():
        - キューにpendingがあれば1本アップロード
        - なければ新しい動画を処理
     """
-    log_info("=== Multi-YouTuber Auto Shorts Scheduler Started ===")
-    log_info(f"Score threshold: {SCORE_THRESHOLD}, Max shorts per video: {MAX_SHORTS_PER_VIDEO}")
+    log_info("")
+    log_info("=" * 60)
+    log_info("   AUTO SHORTS SCHEDULER - START")
+    log_info("=" * 60)
+    log_info(f"Score threshold: {SCORE_THRESHOLD}, Max shorts: {MAX_SHORTS_PER_VIDEO}")
+    log_info("")
 
     if not YOUTUBE_API_KEY:
         log_error("GEMINI_API_KEY (YouTube API Key) is not set")
@@ -73,79 +77,142 @@ async def main():
             log_info("No active YouTubers found. Exiting.")
             return
 
-        log_info(f"Found {len(youtubers)} active YouTuber(s)")
+        log_info(f"Found {len(youtubers)} active YouTuber(s): {', '.join(y.name for y in youtubers)}")
+        log_info("")
+
+        # 処理結果を記録
+        results: list[dict] = []
 
         # 2. 各YouTuberを処理
         for youtuber in youtubers:
+            result = {
+                "name": youtuber.name,
+                "status": "unknown",
+                "message": "",
+                "short_url": None,
+            }
             try:
-                await process_youtuber(youtuber)
+                upload_result = await process_youtuber(youtuber)
+                result["status"] = upload_result.get("status", "unknown")
+                result["message"] = upload_result.get("message", "")
+                result["short_url"] = upload_result.get("short_url")
             except Exception as e:
+                result["status"] = "error"
+                result["message"] = str(e)
                 log_error(
                     f"Failed to process YouTuber {youtuber.name}: {e}",
                     exc_info=True
                 )
-                continue
+            results.append(result)
 
-        log_info("=== Multi-YouTuber Auto Shorts Scheduler Completed ===")
+        # 最終サマリーを出力
+        _print_summary(results)
 
     except Exception as e:
         log_error(f"Scheduler failed: {e}", exc_info=True)
         raise
 
 
-async def process_youtuber(youtuber: YouTuberInfo):
+def _print_summary(results: list[dict]) -> None:
+    """処理結果のサマリーを出力"""
+    log_info("")
+    log_info("=" * 60)
+    log_info("   RESULTS SUMMARY")
+    log_info("=" * 60)
+
+    success_count = 0
+    skip_count = 0
+    error_count = 0
+
+    for r in results:
+        status = r["status"]
+        name = r["name"]
+        message = r["message"]
+        short_url = r.get("short_url", "")
+
+        if status == "uploaded":
+            log_info(f"  [SUCCESS] {name}")
+            log_info(f"            -> {short_url}")
+            success_count += 1
+        elif status == "skipped":
+            log_info(f"  [SKIP]    {name} - {message}")
+            skip_count += 1
+        elif status == "error":
+            log_info(f"  [ERROR]   {name} - {message}")
+            error_count += 1
+        else:
+            log_info(f"  [???]     {name} - {message}")
+
+    log_info("-" * 60)
+    log_info(f"  Total: {len(results)} | Success: {success_count} | Skip: {skip_count} | Error: {error_count}")
+    log_info("=" * 60)
+    log_info("   AUTO SHORTS SCHEDULER - END")
+    log_info("=" * 60)
+    log_info("")
+
+
+async def process_youtuber(youtuber: YouTuberInfo) -> dict:
     """
     1人のYouTuberを処理
 
     Args:
         youtuber: YouTuber情報
+
+    Returns:
+        処理結果 {"status": "uploaded"|"skipped"|"error", "message": str, "short_url": str|None}
     """
-    log_info(f"Processing YouTuber: {youtuber.name} ({youtuber.channel_id})")
+    log_info("")
+    log_info("-" * 60)
+    log_info(f"  CHANNEL: {youtuber.name}")
+    log_info("-" * 60)
 
     # 最新動画を取得
+    log_info(f"  Fetching latest video...")
     latest_video = get_latest_video(youtuber.channel_id, YOUTUBE_API_KEY)
 
     if not latest_video:
-        log_warning(f"No videos found for {youtuber.name}")
-        return
+        log_warning(f"  No videos found")
+        return {"status": "skipped", "message": "No videos found", "short_url": None}
 
-    log_info(f"Latest video: {latest_video.title} ({latest_video.video_id})")
+    log_info(f"  Latest: {latest_video.title[:40]}...")
+    log_info(f"  Video ID: {latest_video.video_id}")
 
     # 既に処理済みかチェック
     if youtuber.last_video_id == latest_video.video_id:
-        log_info(f"Video already processed: {latest_video.video_id}")
-        return
+        log_info(f"  Already processed - skipping")
+        return {"status": "skipped", "message": "Already processed", "short_url": None}
 
     # 1. 動画からショート候補を生成
+    log_info(f"  Generating short candidates...")
     shorts_candidates = await create_shorts_from_video(
         video_info=latest_video,
         youtuber=youtuber
     )
 
     if not shorts_candidates:
-        log_warning(f"No shorts candidates created for {youtuber.name}")
-        # ダウンロード/処理失敗の可能性があるため、処理済みにしない
-        # → 次回再試行される
-        return
+        log_warning(f"  Failed to create short candidates")
+        return {"status": "error", "message": "No shorts created", "short_url": None}
 
     # 2. スコア閾値以上のものをフィルタ
     qualified_shorts = [s for s in shorts_candidates if s['score'] >= SCORE_THRESHOLD]
 
-    log_info(f"Qualified shorts (score >= {SCORE_THRESHOLD}): {len(qualified_shorts)}/{len(shorts_candidates)}")
+    log_info(f"  Qualified: {len(qualified_shorts)}/{len(shorts_candidates)} (threshold: {SCORE_THRESHOLD})")
 
     if not qualified_shorts:
-        log_warning(f"No shorts passed score threshold for {youtuber.name}")
+        log_warning(f"  No shorts passed score threshold")
         update_youtuber_last_video(
             row_index=youtuber.row_index,
             video_id=latest_video.video_id
         )
-        return
+        return {"status": "skipped", "message": "No shorts above threshold", "short_url": None}
 
-    # 3. 最高スコアのショートを即アップロード（キューを使わない）
-    best_short = qualified_shorts[0]  # スコア順にソート済み
-    log_info(f"Uploading best short immediately: {best_short['title']} (score: {best_short['score']})")
+    # 3. 最高スコアのショートを即アップロード
+    best_short = qualified_shorts[0]
+    log_info(f"  Best short: score={best_short['score']:.2f}")
+    log_info(f"  Title: {best_short['title'][:40]}...")
 
     # アクセストークンを取得
+    log_info(f"  Getting access token...")
     access_token = refresh_access_token(
         youtuber.refresh_token,
         YOUTUBE_CLIENT_ID,
@@ -153,13 +220,14 @@ async def process_youtuber(youtuber: YouTuberInfo):
     )
 
     if not access_token:
-        log_error(f"Failed to get access token for {youtuber.name}")
-        return
+        log_error(f"  Failed to get access token")
+        return {"status": "error", "message": "Token refresh failed", "short_url": None}
 
     # 元動画のURL
     source_video_url = get_video_url(latest_video.video_id)
 
     # アップロード実行（18時に予約投稿）
+    log_info(f"  Uploading to YouTube (scheduled 18:00 JST)...")
     short_url = await upload_short(
         video_path=best_short['file_path'],
         title=best_short['title'],
@@ -170,7 +238,8 @@ async def process_youtuber(youtuber: YouTuberInfo):
     )
 
     if short_url:
-        log_info(f"Upload success: {short_url}")
+        log_info(f"  Upload SUCCESS!")
+        log_info(f"  URL: {short_url}")
 
         # UploadLogに記録
         record_upload(
@@ -186,8 +255,11 @@ async def process_youtuber(youtuber: YouTuberInfo):
             row_index=youtuber.row_index,
             video_id=latest_video.video_id
         )
+
+        return {"status": "uploaded", "message": "Success", "short_url": short_url}
     else:
-        log_error(f"Upload failed for {best_short['title']}")
+        log_error(f"  Upload FAILED")
+        return {"status": "error", "message": "Upload failed", "short_url": None}
 
 
 async def upload_from_queue(youtuber: YouTuberInfo, short: dict) -> bool:
@@ -262,8 +334,6 @@ async def create_shorts_from_video(
     Returns:
         生成されたショート動画候補のリスト
     """
-    log_info(f"Creating shorts from: {video_info.title}")
-
     # YouTube URLを生成
     video_url = get_video_url(video_info.video_id)
 
@@ -299,17 +369,15 @@ async def create_shorts_from_video(
 
     JOBS[job_id] = job
 
-    log_info(f"Starting job {job_id}")
-
     await run_job(job_id, job_request, JOBS)
 
     result = JOBS[job_id]
 
     if result.status != "done":
-        log_error(f"Job failed: {result.message}")
+        log_error(f"    Job failed: {result.message}")
         return []
 
-    log_info(f"Job completed: {len(result.outputs)} clips generated")
+    log_info(f"    Clips generated: {len(result.outputs)}")
 
     # 出力ファイルの情報を収集
     shorts_candidates = []
@@ -372,9 +440,10 @@ async def create_shorts_from_video(
     # スコア順にソート
     shorts_candidates.sort(key=lambda x: x['score'], reverse=True)
 
-    log_info(f"Created {len(shorts_candidates)} short candidates")
+    log_info(f"    Candidates (sorted by score):")
     for i, s in enumerate(shorts_candidates):
-        log_info(f"  {i+1}. score={s['score']:.2f} | {s['title'][:30]}... | {s['reason']}")
+        mark = "*" if s['score'] >= SCORE_THRESHOLD else " "
+        log_info(f"      {mark} {i+1}. [{s['score']:.2f}] {s['title'][:35]}...")
 
     return shorts_candidates
 
