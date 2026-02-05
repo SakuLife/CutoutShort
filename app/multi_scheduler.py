@@ -156,12 +156,17 @@ async def process_youtuber(youtuber: YouTuberInfo):
         log_error(f"Failed to get access token for {youtuber.name}")
         return
 
-    # アップロード実行
+    # 元動画のURL
+    source_video_url = get_video_url(latest_video.video_id)
+
+    # アップロード実行（18時に予約投稿）
     short_url = await upload_short(
         video_path=best_short['file_path'],
         title=best_short['title'],
         description=best_short['description'],
-        access_token=access_token
+        access_token=access_token,
+        source_video_url=source_video_url,
+        source_title=latest_video.title,
     )
 
     if short_url:
@@ -214,7 +219,9 @@ async def upload_from_queue(youtuber: YouTuberInfo, short: dict) -> bool:
             video_path=short['file_path'],
             title=short['title'],
             description=short['description'],
-            access_token=access_token
+            access_token=access_token,
+            source_video_url=short.get('source_video_url'),
+            source_title=short.get('source_title'),
         )
 
         if short_url:
@@ -351,6 +358,8 @@ async def create_shorts_from_video(
             'youtuber_name': youtuber.name,
             'channel_id': youtuber.channel_id,
             'source_video_id': video_info.video_id,
+            'source_video_url': video_url,
+            'source_title': video_info.title,
             'file_path': str(video_path.resolve()),
             'title': content["title"],
             'description': content["description"],
@@ -374,30 +383,50 @@ async def upload_short(
     video_path: str,
     title: str,
     description: str,
-    access_token: str
+    access_token: str,
+    source_video_url: str | None = None,
+    source_title: str | None = None,
+    hashtags: list[str] | None = None,
+    schedule_publish: bool = True,
 ) -> str | None:
     """
-    ショート動画をYouTubeにアップロード
+    ショート動画をYouTubeにアップロード（18時に予約投稿）
 
     Args:
         video_path: 動画ファイルパス
         title: タイトル
-        description: 説明文
+        description: 説明文（カスタムテキスト部分）
         access_token: アクセストークン
+        source_video_url: 元動画のURL（説明欄に追加）
+        source_title: 元動画のタイトル
+        hashtags: カスタムハッシュタグ
+        schedule_publish: 18時に予約投稿するか（デフォルトTrue）
 
     Returns:
         アップロードされた動画のURL
     """
-    from app.youtube_upload import upload_video
+    from app.youtube_upload import build_description, get_next_publish_time, upload_video
 
     try:
+        # 説明文を構築（元動画リンク＋ハッシュタグ）
+        full_description = build_description(
+            source_video_url=source_video_url,
+            source_title=source_title,
+            hashtags=hashtags,
+            custom_text=description,
+        )
+
+        # 予約投稿時刻を取得（18時JST）
+        publish_at = get_next_publish_time() if schedule_publish else None
+
         video_id = upload_video(
             video_path=video_path,
             title=title,
-            description=description,
+            description=full_description,
             access_token=access_token,
             privacy_status="public",
-            is_short=True
+            is_short=True,
+            publish_at=publish_at,
         )
 
         if video_id:

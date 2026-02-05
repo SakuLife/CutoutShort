@@ -302,7 +302,8 @@ def get_video_info(url: str, job_id: str | None = None) -> dict:
             "duration": info.get("duration", 0),
             "uploader": info.get("uploader", "Unknown"),
             "upload_date": info.get("upload_date", ""),
-            "description": info.get("description", "")
+            "description": info.get("description", ""),
+            "thumbnail": info.get("thumbnail", ""),
         }
 
         log_info(
@@ -329,3 +330,52 @@ def get_video_info(url: str, job_id: str | None = None) -> dict:
     except Exception as e:
         log_error(f"Unexpected error in get_video_info: {e}", job_id=job_id, exc_info=True)
         raise YtDlpError(f"Video info error: {e}") from e
+
+
+def download_thumbnail(
+    thumbnail_url: str,
+    output_path: str,
+    job_id: str | None = None
+) -> str | None:
+    """
+    サムネイル画像をダウンロード
+
+    Args:
+        thumbnail_url: サムネイルURL
+        output_path: 保存先パス
+        job_id: ジョブID（ログ用）
+
+    Returns:
+        保存先パス（成功時）、None（失敗時）
+    """
+    if not thumbnail_url:
+        log_warning("No thumbnail URL provided", job_id=job_id)
+        return None
+
+    log_info(f"Downloading thumbnail: {thumbnail_url}", job_id=job_id)
+
+    try:
+        output_dir = Path(output_path).parent
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        req = urllib.request.Request(
+            thumbnail_url,
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            with open(output_path, "wb") as f:
+                f.write(resp.read())
+
+        if Path(output_path).exists() and Path(output_path).stat().st_size > 0:
+            log_info(f"Thumbnail downloaded: {output_path}", job_id=job_id)
+            return output_path
+        else:
+            log_warning("Downloaded thumbnail is empty", job_id=job_id)
+            return None
+
+    except urllib.error.URLError as e:
+        log_warning(f"Failed to download thumbnail: {e}", job_id=job_id)
+        return None
+    except Exception as e:
+        log_warning(f"Unexpected error downloading thumbnail: {e}", job_id=job_id)
+        return None

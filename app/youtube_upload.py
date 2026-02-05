@@ -1,5 +1,7 @@
 """YouTube API アップロード機能（マルチYouTuber対応）"""
+from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -12,6 +14,81 @@ from app.youtube_channel import refresh_access_token
 
 # YouTube API のスコープ
 SCOPES = ['https://www.googleapis.com/auth/youtube.upload']
+
+# 予約投稿のデフォルト時刻（日本時間18:00）
+DEFAULT_PUBLISH_HOUR_JST = 18
+
+
+def get_next_publish_time(hour_jst: int = DEFAULT_PUBLISH_HOUR_JST) -> str:
+    """
+    次の予約投稿時刻を取得（ISO 8601形式）
+
+    Args:
+        hour_jst: 日本時間の時刻（デフォルト18時）
+
+    Returns:
+        ISO 8601形式の時刻文字列
+    """
+    jst = ZoneInfo("Asia/Tokyo")
+    now = datetime.now(jst)
+
+    # 今日のhour_jst時を計算
+    publish_time = now.replace(hour=hour_jst, minute=0, second=0, microsecond=0)
+
+    # 既に過ぎている場合は翌日
+    if now >= publish_time:
+        publish_time += timedelta(days=1)
+
+    # UTCに変換してISO 8601形式で返す
+    return publish_time.astimezone(ZoneInfo("UTC")).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+
+def build_description(
+    source_video_url: str | None = None,
+    source_title: str | None = None,
+    hashtags: list[str] | None = None,
+    custom_text: str | None = None,
+) -> str:
+    """
+    ショート動画の説明文を生成
+
+    Args:
+        source_video_url: 元動画のURL
+        source_title: 元動画のタイトル
+        hashtags: ハッシュタグリスト
+        custom_text: カスタムテキスト
+
+    Returns:
+        説明文
+    """
+    lines = []
+
+    # カスタムテキスト
+    if custom_text:
+        lines.append(custom_text)
+        lines.append("")
+
+    # 元動画へのリンク
+    if source_video_url:
+        lines.append("▼ 本編はこちら")
+        if source_title:
+            lines.append(f"『{source_title}』")
+        lines.append(source_video_url)
+        lines.append("")
+
+    # ハッシュタグ
+    default_hashtags = ["#Shorts", "#切り抜き"]
+    all_hashtags = (hashtags or []) + default_hashtags
+    # 重複を除去しつつ順序を維持
+    seen = set()
+    unique_hashtags = []
+    for tag in all_hashtags:
+        if tag not in seen:
+            seen.add(tag)
+            unique_hashtags.append(tag)
+    lines.append(" ".join(unique_hashtags))
+
+    return "\n".join(lines)
 
 
 def get_youtube_service_from_refresh_token(refresh_token: str):
@@ -53,7 +130,8 @@ def upload_video(
     privacy_status: str = "public",
     category_id: str = "22",
     tags: list[str] | None = None,
-    is_short: bool = True
+    is_short: bool = True,
+    publish_at: str | None = None,
 ) -> str | None:
     """
     アクセストークンを直接指定してYouTubeにアップロード
@@ -68,6 +146,7 @@ def upload_video(
         category_id: カテゴリID
         tags: タグリスト
         is_short: ショート動画かどうか
+        publish_at: 予約投稿時刻（ISO 8601形式、指定時はprivacy_statusをprivateに自動変更）
 
     Returns:
         動画ID（失敗時はNone）
@@ -88,6 +167,19 @@ def upload_video(
         if is_short:
             default_tags.append('#Shorts')
 
+        # 予約投稿の設定
+        status_dict = {
+            'selfDeclaredMadeForKids': False
+        }
+
+        if publish_at:
+            # 予約投稿時はprivateにしてpublishAtを設定
+            status_dict['privacyStatus'] = 'private'
+            status_dict['publishAt'] = publish_at
+            log_info(f"Scheduling publish at: {publish_at}")
+        else:
+            status_dict['privacyStatus'] = privacy_status
+
         body = {
             'snippet': {
                 'title': title,
@@ -95,10 +187,7 @@ def upload_video(
                 'tags': tags or default_tags,
                 'categoryId': category_id
             },
-            'status': {
-                'privacyStatus': privacy_status,
-                'selfDeclaredMadeForKids': False
-            }
+            'status': status_dict
         }
 
         media = MediaFileUpload(
@@ -143,7 +232,8 @@ def upload_video_with_refresh_token(
     privacy_status: str = "public",
     category_id: str = "22",
     tags: list[str] | None = None,
-    is_short: bool = True
+    is_short: bool = True,
+    publish_at: str | None = None,
 ) -> str | None:
     """
     リフレッシュトークンを使ってYouTubeにアップロード
@@ -157,6 +247,7 @@ def upload_video_with_refresh_token(
         category_id: カテゴリID
         tags: タグリスト
         is_short: ショート動画かどうか
+        publish_at: 予約投稿時刻（ISO 8601形式）
 
     Returns:
         動画ID（失敗時はNone）
@@ -179,7 +270,8 @@ def upload_video_with_refresh_token(
         privacy_status=privacy_status,
         category_id=category_id,
         tags=tags,
-        is_short=is_short
+        is_short=is_short,
+        publish_at=publish_at,
     )
 
 

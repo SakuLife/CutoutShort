@@ -22,11 +22,19 @@ def render_clipset(
     output_dir: str | None = None,
     job_id: str | None = None,
     title: str | None = None,
-    bottom_text: str | None = None,
-    top_text: str | None = None,
+    thumbnail_path: str | None = None,
 ) -> list[str]:
     """
     セグメントリストから複数のショート動画をレンダリングする.
+
+    Args:
+        in_mp4: 入力動画パス
+        srt_path: 字幕ファイルパス
+        segments: セグメントリスト
+        output_dir: 出力ディレクトリ
+        job_id: ジョブID
+        title: 動画タイトル
+        thumbnail_path: サムネイル画像パス
     """
     log_info(f"Starting rendering {len(segments)} clips", job_id=job_id, stage="rendering")
 
@@ -57,8 +65,8 @@ def render_clipset(
                 output_path=str(output_path),
                 job_id=job_id,
                 title=title,
-                bottom_text=bottom_text,
-                top_text=top_text,
+                thumbnail_path=thumbnail_path,
+                hook_text=segment.hook_text,
             )
 
             rendered_files.append(str(output_path))
@@ -83,24 +91,23 @@ def _render_single_clip(
     output_path: str,
     job_id: str | None,
     title: str | None = None,
-    bottom_text: str | None = None,
-    top_text: str | None = None,
+    thumbnail_path: str | None = None,
+    hook_text: str | None = None,
 ) -> None:
     """
     単一クリップをレンダリング（9:16 1080x1920、レターボックス、グローオーバーレイ付き）.
+
+    Args:
+        thumbnail_path: サムネイル画像パス（オーバーレイ上部に表示）
+        hook_text: 本動画誘導テキスト（オーバーレイ下部に表示）
     """
     duration = end - start
-
-    overlay_top = top_text or "音楽業界社長が語る!!"
-    overlay_title = title or "メインのタイトル"
-    overlay_bottom = bottom_text or "動画のポイントとか"
 
     overlay_path = Path(output_path).with_suffix(".overlay.png")
     generate_overlay_card(
         output_path=str(overlay_path),
-        top_text=overlay_top,
-        title_text=overlay_title,
-        bottom_text=overlay_bottom,
+        thumbnail_path=thumbnail_path,
+        hook_text=hook_text,
     )
 
     # メイン映像を9:16にレターボックス化

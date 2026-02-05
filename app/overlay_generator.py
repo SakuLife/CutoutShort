@@ -16,13 +16,18 @@ def _load_font(path: Path, size: int) -> ImageFont.FreeTypeFont:
         except Exception:
             pass
 
-    # フォールバック: Windows日本語フォントを順に試す
+    # フォールバック: 日本語フォントを順に試す
     fallback_fonts = [
+        # Windows
         "C:/Windows/Fonts/meiryo.ttc",      # メイリオ
         "C:/Windows/Fonts/msgothic.ttc",    # MSゴシック
         "C:/Windows/Fonts/YuGothM.ttc",     # 游ゴシック Medium
         "C:/Windows/Fonts/YuGothR.ttc",     # 游ゴシック Regular
         "C:/Windows/Fonts/msmincho.ttc",    # MS明朝
+        # Linux (Docker / Cloud Run)
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJKjp-Regular.otf",
+        "/usr/share/fonts/opentype/noto/NotoSansCJKjp-Regular.otf",
     ]
 
     for fallback in fallback_fonts:
@@ -92,19 +97,28 @@ def _wrap_text(text: str, max_chars_per_line: int = 10) -> str:
 
 def generate_overlay_card(
     output_path: str,
-    top_text: str,
-    title_text: str,
-    bottom_text: str,
+    title_text: str = "",
+    bottom_text: str = "",
     *,
     width: int = 1080,
     height: int = 1920,
     keifont_path: Path | None = None,
+    thumbnail_path: str | None = None,
+    hook_text: str | None = None,
 ) -> str:
     """
     Generate a transparent overlay card PNG with glow effects.
 
-    The layout matches the manual mock: top small white, main title with yellow
-    stroke & yellow glow, bottom red with yellow glow.
+    The layout:
+    - Top area: Thumbnail image with rounded corners and shadow
+    - Bottom area: Hook text (誘導ワード) with red border
+
+    Args:
+        output_path: 出力PNGファイルパス
+        title_text: メインタイトル（現在未使用、将来用）
+        bottom_text: 下部テキスト（現在未使用、hook_textを優先）
+        thumbnail_path: サムネイル画像パス
+        hook_text: 本動画誘導テキスト（下部に表示）
     """
     # スクリプトのディレクトリからの相対パスでkeifontを探す
     if keifont_path is None:
@@ -116,54 +130,79 @@ def generate_overlay_card(
 
     img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
 
-    # 小さいテキスト用は日本語フォント、タイトルと下部テキストはkeifont（日本語対応フォントにフォールバック）
-    # 参考画像のように大きなフォントサイズに
-    font_small = _load_font(meiryo_path, 54)
-    font_title = _load_font(keifont_path, 86)
-    font_bottom = _load_font(keifont_path, 70)
+    # フォント設定
+    font_hook = _load_font(keifont_path, 64)
 
-    rect_h = 720
-    rect_top = (height - rect_h) // 2
-    rect_bottom = rect_top + rect_h
+    # レイアウト計算
     center_x = width / 2
-    gap_small = 320  # 260から320に増やして上に配置
-    gap_big = 90
-    bottom_gap = 100
 
-    # テキストを2行に改行
-    title_wrapped = _wrap_text(title_text, max_chars_per_line=10)
-    bottom_wrapped = _wrap_text(bottom_text, max_chars_per_line=10)
+    # サムネイル配置（上部）
+    if thumbnail_path and os.path.exists(thumbnail_path):
+        try:
+            thumb = Image.open(thumbnail_path).convert("RGBA")
 
+            # サムネイルサイズ計算（幅900px、アスペクト比維持）
+            thumb_width = 900
+            aspect = thumb.height / thumb.width
+            thumb_height = int(thumb_width * aspect)
+
+            # リサイズ
+            thumb = thumb.resize((thumb_width, thumb_height), Image.Resampling.LANCZOS)
+
+            # 角丸マスクを作成
+            mask = Image.new("L", (thumb_width, thumb_height), 0)
+            mask_draw = ImageDraw.Draw(mask)
+            corner_radius = 30
+            mask_draw.rounded_rectangle(
+                [(0, 0), (thumb_width, thumb_height)],
+                radius=corner_radius,
+                fill=255
+            )
+
+            # 影を作成
+            shadow_offset = 10
+            shadow = Image.new("RGBA", (thumb_width + shadow_offset * 2, thumb_height + shadow_offset * 2), (0, 0, 0, 0))
+            shadow_mask = Image.new("L", shadow.size, 0)
+            shadow_draw = ImageDraw.Draw(shadow_mask)
+            shadow_draw.rounded_rectangle(
+                [(shadow_offset, shadow_offset), (thumb_width + shadow_offset, thumb_height + shadow_offset)],
+                radius=corner_radius,
+                fill=180
+            )
+            shadow_mask = shadow_mask.filter(ImageFilter.GaussianBlur(15))
+            shadow.putalpha(shadow_mask)
+
+            # 配置位置（上部中央）
+            thumb_x = (width - thumb_width) // 2
+            thumb_y = 100
+
+            # 影を配置
+            img.paste(shadow, (thumb_x - shadow_offset, thumb_y - shadow_offset), shadow)
+
+            # サムネイルを角丸で配置
+            thumb.putalpha(mask)
+            img.paste(thumb, (thumb_x, thumb_y), thumb)
+
+        except Exception:
+            pass  # サムネイル読み込み失敗時はスキップ
+
+    # 下部に誘導テキスト（hook_text）を配置
     draw = ImageDraw.Draw(img)
-    draw.text(
-        (center_x, rect_top - gap_small),
-        top_text,
-        font=font_small,
-        fill=(255, 255, 255, 255),
-        anchor="mm",
-    )
 
-    _draw_dilated_glow(
-        base_img=img,
-        pos=(center_x, rect_top - gap_big),
-        text=title_wrapped,
-        font=font_title,
-        fill=(0, 0, 0, 255),
-        stroke_fill=(255, 215, 0, 255),
-        glow_color=(255, 230, 0, 255),
-    )
+    if hook_text:
+        hook_y = height - 250  # 下部から250px上
+        hook_wrapped = _wrap_text(hook_text, max_chars_per_line=12)
 
-    # 下部テキストはグローなしで描画（赤縁のみ）
-    tdraw_bottom = ImageDraw.Draw(img)
-    tdraw_bottom.text(
-        (center_x, rect_bottom + bottom_gap),
-        bottom_wrapped,
-        font=font_bottom,
-        fill=(255, 255, 255, 255),
-        stroke_width=14,
-        stroke_fill=(220, 0, 0, 255),
-        anchor="mm",
-    )
+        # 白文字＋赤縁（目立つスタイル）
+        draw.text(
+            (center_x, hook_y),
+            hook_wrapped,
+            font=font_hook,
+            fill=(255, 255, 255, 255),
+            stroke_width=12,
+            stroke_fill=(220, 0, 0, 255),
+            anchor="mm",
+        )
 
     out_path = Path(output_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)

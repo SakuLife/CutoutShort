@@ -97,6 +97,7 @@ class SegmentInfo(BaseModel):
     score: float = Field(default=0.5, ge=0.0, le=1.0, description="スコア（0.0〜1.0）")
     method: Literal["llm", "rule"] = Field(description="抽出方法")
     reason: str | None = Field(default=None, description="選定理由")
+    hook_text: str | None = Field(default=None, description="本動画への誘導テキスト")
 
 
 class TranscriptSegment(BaseModel):
@@ -114,6 +115,7 @@ class JobArtifacts(BaseModel):
     segments: list[SegmentInfo] = Field(default_factory=list, description="選定セグメント")
     rendered_files: list[str] = Field(default_factory=list, description="レンダリング済みファイルパス")
     drive_links: list[str] = Field(default_factory=list, description="アップロード済みDriveリンク")
+    thumbnail_path: str | None = Field(default=None, description="サムネイル画像パス")
 
 
 class Job(BaseModel):
