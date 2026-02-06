@@ -264,6 +264,54 @@ def _retry_bot_detected(
     return None
 
 
+def _retry_get_video_info_with_cookies(url: str, job_id: str | None) -> dict | None:
+    """Bot検出時にCookiesでリトライしてビデオ情報を取得"""
+    if not YOUTUBE_COOKIES_PATH or not Path(YOUTUBE_COOKIES_PATH).exists():
+        return None
+
+    log_warning(
+        f"Bot detected in get_video_info, retrying with cookies",
+        job_id=job_id,
+    )
+
+    cmd = _build_base_cmd()
+    cmd.extend(["--dump-json", "--no-playlist", "--cookies", YOUTUBE_COOKIES_PATH])
+    cmd.append(url)
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=True
+        )
+
+        import json
+        info = json.loads(result.stdout)
+
+        video_info = {
+            "title": info.get("title", "Unknown"),
+            "duration": info.get("duration", 0),
+            "uploader": info.get("uploader", "Unknown"),
+            "upload_date": info.get("upload_date", ""),
+            "description": info.get("description", ""),
+            "thumbnail": info.get("thumbnail", ""),
+        }
+
+        log_info(
+            "Video info retrieved with cookies",
+            job_id=job_id,
+            meta=video_info
+        )
+
+        return video_info
+
+    except Exception as e:
+        log_warning(f"Retry with cookies also failed: {e}", job_id=job_id)
+        return None
+
+
 def get_video_info(url: str, job_id: str | None = None) -> dict:
     """
     YouTube動画の情報を取得（タイトル、長さなど）
@@ -319,13 +367,21 @@ def get_video_info(url: str, job_id: str | None = None) -> dict:
         raise YtDlpError(f"Video info retrieval timeout: {e}") from e
 
     except subprocess.CalledProcessError as e:
+        stderr = e.stderr or ""
+
+        # Bot検出時はCookiesでリトライ
+        if "Sign in to confirm" in stderr or "bot" in stderr.lower():
+            retry_result = _retry_get_video_info_with_cookies(url, job_id)
+            if retry_result:
+                return retry_result
+
         log_error(
             "get_video_info failed",
             job_id=job_id,
-            meta={"stderr": e.stderr},
+            meta={"stderr": stderr},
             exc_info=True
         )
-        raise YtDlpError(f"Video info retrieval failed: {e.stderr}") from e
+        raise YtDlpError(f"Video info retrieval failed: {stderr}") from e
 
     except Exception as e:
         log_error(f"Unexpected error in get_video_info: {e}", job_id=job_id, exc_info=True)

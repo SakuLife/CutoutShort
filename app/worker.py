@@ -298,7 +298,7 @@ async def _fallback_fixed_segments(job: Job, jobs_store: dict[str, Job]) -> None
             segments.append(SegmentInfo(
                 start=start,
                 end=end,
-                score=0.5,
+                score=0.65,
                 method="rule",
                 reason="フォールバック（固定尺）"
             ))

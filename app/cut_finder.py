@@ -504,9 +504,9 @@ def _create_fixed_segments(
             segments.append(SegmentInfo(
                 start=current_start,
                 end=end,
-                score=0.5,
+                score=0.65,
                 method="rule",
-                reason="固定尺分割"
+                reason="固定尺分割（フォールバック）"
             ))
         current_start = end
 
