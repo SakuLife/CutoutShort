@@ -32,6 +32,64 @@ from app.sheets import (
 from app.worker import run_job
 from app.youtube_channel import VideoInfo, YouTuberInfo, get_latest_video, get_video_url, refresh_access_token
 
+# デバッグログ保存ディレクトリ
+DEBUG_LOG_DIR = Path(os.getenv("DEBUG_LOG_DIR", "logs/debug"))
+
+
+def _save_debug_log(
+    youtuber_name: str,
+    video_id: str,
+    transcript: str,
+    segments: list,
+    candidates: list,
+) -> None:
+    """デバッグ用に台本・セグメント情報をファイルに保存"""
+    try:
+        DEBUG_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_name = re.sub(r'[\\/:*?"<>|]', '_', youtuber_name)
+        filename = DEBUG_LOG_DIR / f"{timestamp}_{safe_name}_{video_id}.txt"
+
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write("=" * 60 + "\n")
+            f.write(f"DEBUG LOG: {youtuber_name}\n")
+            f.write(f"Video ID: {video_id}\n")
+            f.write(f"Generated: {datetime.now().isoformat()}\n")
+            f.write("=" * 60 + "\n\n")
+
+            # 台本（トランスクリプト）
+            f.write("## TRANSCRIPT (文字起こし)\n")
+            f.write("-" * 60 + "\n")
+            f.write(transcript if transcript else "(empty)\n")
+            f.write("\n\n")
+
+            # セグメント抽出結果
+            f.write("## SEGMENTS (抽出されたセグメント)\n")
+            f.write("-" * 60 + "\n")
+            for i, seg in enumerate(segments, 1):
+                f.write(f"{i}. [{seg.start:.1f}s - {seg.end:.1f}s] ")
+                f.write(f"score={seg.score:.2f} method={seg.method}\n")
+                f.write(f"   reason: {seg.reason}\n")
+                if seg.hook_text:
+                    f.write(f"   hook: {seg.hook_text}\n")
+                f.write("\n")
+
+            # 最終候補（タイトル生成後）
+            f.write("## CANDIDATES (最終候補)\n")
+            f.write("-" * 60 + "\n")
+            for i, c in enumerate(candidates, 1):
+                f.write(f"{i}. score={c['score']:.2f} | {c['method']}\n")
+                f.write(f"   title: {c['title']}\n")
+                f.write(f"   range: {c['start_sec']:.1f}s - {c['end_sec']:.1f}s\n")
+                f.write(f"   reason: {c['reason']}\n")
+                f.write("\n")
+
+        log_info(f"    Debug log saved: {filename}")
+
+    except Exception as e:
+        log_warning(f"Failed to save debug log: {e}")
+
+
 # YouTube API Key（チャンネル情報取得用、Gemini APIと共通）
 YOUTUBE_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
@@ -247,7 +305,13 @@ async def process_youtuber(youtuber: YouTuberInfo) -> dict:
             channel_id=youtuber.channel_id,
             source_video_id=best_short['source_video_id'],
             short_title=best_short['title'],
-            short_url=short_url
+            short_url=short_url,
+            duration_sec=best_short.get('duration_sec', 0),
+            start_sec=best_short.get('start_sec', 0),
+            end_sec=best_short.get('end_sec', 0),
+            method=best_short.get('method', ''),
+            score=best_short.get('score', 0),
+            reason=best_short.get('reason', ''),
         )
 
         # 最終処理動画IDを更新
@@ -309,7 +373,13 @@ async def upload_from_queue(youtuber: YouTuberInfo, short: dict) -> bool:
                 channel_id=youtuber.channel_id,
                 source_video_id=short['source_video_id'],
                 short_title=short['title'],
-                short_url=short_url
+                short_url=short_url,
+                duration_sec=short.get('duration_sec', 0),
+                start_sec=short.get('start_sec', 0),
+                end_sec=short.get('end_sec', 0),
+                method=short.get('method', ''),
+                score=short.get('score', 0),
+                reason=short.get('reason', ''),
             )
 
             return True
@@ -400,11 +470,13 @@ async def create_shorts_from_video(
         score = 0.5
         reason = ""
 
-        # artifactsのsegmentsからスコアと理由を探す
+        # artifactsのsegmentsからスコア、理由、メソッドを取得
+        method = "unknown"
         for seg in result.artifacts.segments:
             if abs(seg.start - segment_start) < 1.0 and abs(seg.end - segment_end) < 1.0:
                 score = seg.score
                 reason = seg.reason or ""
+                method = seg.method or "unknown"
                 break
 
         # AI生成タイトルと説明文
@@ -433,8 +505,10 @@ async def create_shorts_from_video(
             'description': content["description"],
             'score': score,
             'reason': reason,
+            'method': method,
             'start_sec': segment_start,
-            'end_sec': segment_end
+            'end_sec': segment_end,
+            'duration_sec': segment_end - segment_start,
         })
 
     # スコア順にソート
@@ -444,6 +518,21 @@ async def create_shorts_from_video(
     for i, s in enumerate(shorts_candidates):
         mark = "*" if s['score'] >= SCORE_THRESHOLD else " "
         log_info(f"      {mark} {i+1}. [{s['score']:.2f}] {s['title'][:35]}...")
+
+    # デバッグログを保存
+    transcript_text = ""
+    if result.artifacts.transcript_json:
+        transcript_text = "\n".join(
+            f"[{seg.start:.1f}s] {seg.text}"
+            for seg in result.artifacts.transcript_json
+        )
+    _save_debug_log(
+        youtuber_name=youtuber.name,
+        video_id=video_info.video_id,
+        transcript=transcript_text,
+        segments=result.artifacts.segments,
+        candidates=shorts_candidates,
+    )
 
     return shorts_candidates
 

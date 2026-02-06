@@ -412,6 +412,12 @@ def record_upload(
     source_video_id: str,
     short_title: str,
     short_url: str,
+    duration_sec: float = 0,
+    start_sec: float = 0,
+    end_sec: float = 0,
+    method: str = "",
+    score: float = 0,
+    reason: str = "",
     spreadsheet_id: str | None = None,
     sheet_name: str = "UploadLog"
 ) -> None:
@@ -424,6 +430,12 @@ def record_upload(
         source_video_id: 元動画のID
         short_title: ショート動画のタイトル
         short_url: ショート動画のURL
+        duration_sec: 動画秒数
+        start_sec: 開始位置（秒）
+        end_sec: 終了位置（秒）
+        method: 抽出方法（llm/rule）
+        score: スコア
+        reason: 選定理由
         spreadsheet_id: スプレッドシートID
         sheet_name: シート名
     """
@@ -438,27 +450,22 @@ def record_upload(
     try:
         worksheet = get_sheet(spreadsheet_id, sheet_name)
 
-        # ヘッダーがなければ追加
-        headers = worksheet.row_values(1)
-        if not headers:
-            worksheet.append_row([
-                'アップロード日時',
-                'YouTuber名',
-                'チャンネルID',
-                '元動画ID',
-                'ショートタイトル',
-                'ショートURL'
-            ])
-
-        # 記録を追加
+        # 記録を追加（既存ヘッダーに合わせる）
+        # ヘッダー: 投稿日時 | タイトル | YouTube URL | 動画秒数 | 開始位置 | 終了位置 | 抽出方法 | ステータス | スコア | 選定理由 | YouTuber | 元動画ID
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         worksheet.append_row([
-            now,
-            youtuber_name,
-            channel_id,
-            source_video_id,
-            short_title,
-            short_url
+            now,                    # 投稿日時
+            short_title,            # タイトル
+            short_url,              # YouTube URL
+            round(duration_sec, 1), # 動画秒数
+            round(start_sec, 1),    # 開始位置
+            round(end_sec, 1),      # 終了位置
+            method,                 # 抽出方法
+            "uploaded",             # ステータス
+            round(score, 2),        # スコア
+            reason,                 # 選定理由
+            youtuber_name,          # YouTuber
+            source_video_id,        # 元動画ID
         ])
 
         log_info(f"Upload recorded: {short_url}")
