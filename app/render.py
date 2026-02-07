@@ -110,9 +110,9 @@ def _render_single_clip(
         hook_text=hook_text,
     )
 
-    # メイン映像を9:16にレターボックス化
+    # メイン映像を9:16にレターボックス化（端が見切れないよう95%にスケール）
     vf_main = (
-        "scale=iw*min(1080/iw\\,1920/ih):ih*min(1080/iw\\,1920/ih),"
+        "scale=iw*min(1080/iw\\,1920/ih)*0.95:ih*min(1080/iw\\,1920/ih)*0.95,"
         "pad=1080:1920:(1080-iw)/2:(1920-ih)/2,"
         "setsar=1"
     )

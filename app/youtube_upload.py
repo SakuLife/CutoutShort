@@ -68,11 +68,12 @@ def build_description(
         lines.append(custom_text)
         lines.append("")
 
-    # 元動画へのリンク
+    # 元動画へのリンク（URLを単独行にしてタップ可能に）
     if source_video_url:
-        lines.append("▼ 本編はこちら")
         if source_title:
-            lines.append(f"『{source_title}』")
+            lines.append(f"▶ 本編フル動画『{source_title}』")
+        else:
+            lines.append("▶ 本編フル動画はこちら")
         lines.append(source_video_url)
         lines.append("")
 
