@@ -87,7 +87,7 @@ def _add_auth_args(cmd: list[str], job_id: str | None = None) -> None:
 def _build_download_args(output_path: str, url: str) -> list[str]:
     """ダウンロード用の共通引数を構築"""
     return [
-        "--format", "bestvideo[ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        "--format", "bestvideo[height<=1080]+bestaudio/best",
         "--merge-output-format", "mp4",
         "--output", output_path,
         "--no-playlist",
