@@ -1,0 +1,131 @@
+name: Multi-YouTuber Auto Shorts
+
+on:
+  schedule:
+    # 毎日 15:00 JST (06:00 UTC) に実行
+    - cron: '0 6 * * *'
+  workflow_dispatch:  # 手動実行も可能
+
+jobs:
+  process-videos:
+    runs-on: ubuntu-latest  # GitHub-hosted runner
+    timeout-minutes: 120  # 最大2時間
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-noto-cjk
+
+      - name: Verify environment
+        run: |
+          echo "=== Environment Check ==="
+          echo "Python: $(python --version)"
+          echo "ffmpeg: $(ffmpeg -version 2>&1 | head -1)"
+          echo "yt-dlp: $(yt-dlp --version)"
+          echo "Working directory: $PWD"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Create output directory
+        run: mkdir -p runout
+
+      - name: Set up Google Service Account credentials
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -z "$GOOGLE_SERVICE_ACCOUNT_JSON" ]; then
+            echo "GOOGLE_SERVICE_ACCOUNT_JSON is not set"
+            exit 1
+          fi
+          echo "$GOOGLE_SERVICE_ACCOUNT_JSON" | python -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          if 'private_key' in data:
+              data['private_key'] = data['private_key'].replace('\\\\n', '\\n')
+          json.dump(data, open('service-account.json', 'w'))
+          "
+          echo "service-account.json created successfully"
+
+      - name: Create .env file
+        env:
+          DRIVE_OUTPUT_FOLDER_ID: ${{ secrets.DRIVE_OUTPUT_FOLDER_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+        run: |
+          cat > .env << EOF
+          # Multi-YouTuber Auto Shorts System
+
+          MAKE_SHARED_SECRET=not_used_in_actions
+          GOOGLE_APPLICATION_CREDENTIALS=./service-account.json
+          GEMINI_API_KEY=$GEMINI_API_KEY
+          DRIVE_OUTPUT_FOLDER_ID=$DRIVE_OUTPUT_FOLDER_ID
+          SPREADSHEET_ID=$SPREADSHEET_ID
+          SHEET_YOUTUBERS=YouTubers
+          SHEET_UPLOAD_LOG=UploadLog
+          YOUTUBE_CLIENT_ID=$YOUTUBE_CLIENT_ID
+          YOUTUBE_CLIENT_SECRET=$YOUTUBE_CLIENT_SECRET
+
+          WHISPER_MODEL=small
+          WHISPER_DEVICE=cpu
+          WHISPER_COMPUTE_TYPE=int8
+          GEMINI_MODEL=gemini-2.0-flash
+
+          MAX_CONCURRENT_JOBS=3
+          TMP_DIR=./runout
+
+          DOWNLOAD_TIMEOUT=600
+          TRANSCRIBE_TIMEOUT=1800
+          RENDER_TIMEOUT=600
+          UPLOAD_TIMEOUT=600
+
+          MAX_RETRIES=3
+          RETRY_BACKOFF_BASE=2.0
+          EOF
+
+      - name: Set up YouTube cookies
+        env:
+          YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
+        run: |
+          if [ -n "$YOUTUBE_COOKIES" ]; then
+            echo "$YOUTUBE_COOKIES" > youtube_cookies.txt
+            echo "YouTube cookies file created"
+          else
+            echo "No YouTube cookies configured"
+          fi
+
+      - name: Run Multi-YouTuber scheduler
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/service-account.json
+          YOUTUBE_COOKIES_PATH: ${{ github.workspace }}/youtube_cookies.txt
+        run: python -m app.multi_scheduler
+
+      - name: Upload generated shorts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shorts-${{ github.run_id }}
+          path: |
+            runout/*.mp4
+            runout/*.srt
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f service-account.json youtube_cookies.txt
+          echo "Cleanup completed"
