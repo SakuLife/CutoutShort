@@ -445,6 +445,20 @@ async def create_shorts_from_video(
 
     if result.status != "done":
         log_error(f"    Job failed: {result.message}")
+        # 失敗時もデバッグログを保存
+        transcript_text = ""
+        if result.artifacts.transcript_json:
+            transcript_text = "\n".join(
+                f"[{seg.start:.1f}s] {seg.text}"
+                for seg in result.artifacts.transcript_json
+            )
+        _save_debug_log(
+            youtuber_name=youtuber.name,
+            video_id=video_info.video_id,
+            transcript=transcript_text or f"(Job failed: {result.message})",
+            segments=result.artifacts.segments or [],
+            candidates=[],
+        )
         return []
 
     log_info(f"    Clips generated: {len(result.outputs)}")
