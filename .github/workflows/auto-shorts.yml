@@ -8,7 +8,7 @@ on:
 
 jobs:
   process-videos:
-    runs-on: self-hosted  # セルフホストランナー（Windows）
+    runs-on: self-hosted  # セルフホストランナー（WSL Ubuntu）
     timeout-minutes: 120  # 最大2時間
 
     steps:
@@ -16,51 +16,39 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Verify environment
-        shell: powershell
         run: |
-          Write-Host "=== Environment Check ==="
-          Write-Host "Python: $(python --version)"
-          Write-Host "ffmpeg: $(ffmpeg -version 2>&1 | Select-Object -First 1)"
-          Write-Host "yt-dlp: $(yt-dlp --version)"
-          Write-Host "Working directory: $PWD"
+          echo "=== Environment Check ==="
+          echo "Python: $(python3 --version)"
+          echo "ffmpeg: $(ffmpeg -version 2>&1 | head -1)"
+          echo "yt-dlp: $(yt-dlp --version)"
+          echo "Working directory: $PWD"
 
       - name: Install Python dependencies
-        shell: powershell
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
+          python3 -m pip install --upgrade pip --break-system-packages
+          python3 -m pip install -r requirements.txt --break-system-packages
 
       - name: Create output directory
-        shell: powershell
-        run: |
-          if (-not (Test-Path "runout")) {
-            New-Item -ItemType Directory -Path "runout"
-          }
+        run: mkdir -p runout
 
       - name: Set up Google Service Account credentials
-        shell: powershell
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
         run: |
-          $jsonContent = $env:GOOGLE_SERVICE_ACCOUNT_JSON
-          if (-not $jsonContent) {
-            Write-Error "GOOGLE_SERVICE_ACCOUNT_JSON is not set"
+          if [ -z "$GOOGLE_SERVICE_ACCOUNT_JSON" ]; then
+            echo "GOOGLE_SERVICE_ACCOUNT_JSON is not set"
             exit 1
-          }
-
-          # Parse and fix private_key format
-          $jsonObj = $jsonContent | ConvertFrom-Json
-          if ($jsonObj.private_key) {
-            $jsonObj.private_key = $jsonObj.private_key -replace '\\n', "`n"
-          }
-
-          # Write UTF-8 without BOM
-          $jsonText = $jsonObj | ConvertTo-Json -Depth 10
-          [System.IO.File]::WriteAllText("$PWD\service-account.json", $jsonText)
-          Write-Host "service-account.json created successfully"
+          fi
+          echo "$GOOGLE_SERVICE_ACCOUNT_JSON" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          if 'private_key' in data:
+              data['private_key'] = data['private_key'].replace('\\\\n', '\\n')
+          json.dump(data, open('service-account.json', 'w'))
+          "
+          echo "service-account.json created successfully"
 
       - name: Create .env file
-        shell: powershell
         env:
           DRIVE_OUTPUT_FOLDER_ID: ${{ secrets.DRIVE_OUTPUT_FOLDER_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -68,18 +56,18 @@ jobs:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
         run: |
-          @"
+          cat > .env << EOF
           # Multi-YouTuber Auto Shorts System
 
           MAKE_SHARED_SECRET=not_used_in_actions
           GOOGLE_APPLICATION_CREDENTIALS=./service-account.json
-          GEMINI_API_KEY=$env:GEMINI_API_KEY
-          DRIVE_OUTPUT_FOLDER_ID=$env:DRIVE_OUTPUT_FOLDER_ID
-          SPREADSHEET_ID=$env:SPREADSHEET_ID
+          GEMINI_API_KEY=$GEMINI_API_KEY
+          DRIVE_OUTPUT_FOLDER_ID=$DRIVE_OUTPUT_FOLDER_ID
+          SPREADSHEET_ID=$SPREADSHEET_ID
           SHEET_YOUTUBERS=YouTubers
           SHEET_UPLOAD_LOG=UploadLog
-          YOUTUBE_CLIENT_ID=$env:YOUTUBE_CLIENT_ID
-          YOUTUBE_CLIENT_SECRET=$env:YOUTUBE_CLIENT_SECRET
+          YOUTUBE_CLIENT_ID=$YOUTUBE_CLIENT_ID
+          YOUTUBE_CLIENT_SECRET=$YOUTUBE_CLIENT_SECRET
 
           WHISPER_MODEL=small
           WHISPER_DEVICE=cpu
@@ -96,26 +84,24 @@ jobs:
 
           MAX_RETRIES=3
           RETRY_BACKOFF_BASE=2.0
-          "@ | Out-String | ForEach-Object { [System.IO.File]::WriteAllText("$PWD\.env", $_) }
+          EOF
 
       - name: Set up YouTube cookies
-        shell: powershell
         env:
           YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
         run: |
-          if ($env:YOUTUBE_COOKIES) {
-            [System.IO.File]::WriteAllText("$PWD\youtube_cookies.txt", $env:YOUTUBE_COOKIES)
-            Write-Host "YouTube cookies file created"
-          } else {
-            Write-Host "No YouTube cookies configured"
-          }
+          if [ -n "$YOUTUBE_COOKIES" ]; then
+            echo "$YOUTUBE_COOKIES" > youtube_cookies.txt
+            echo "YouTube cookies file created"
+          else
+            echo "No YouTube cookies configured"
+          fi
 
       - name: Run Multi-YouTuber scheduler
-        shell: powershell
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}\service-account.json
-          YOUTUBE_COOKIES_PATH: ${{ github.workspace }}\youtube_cookies.txt
-        run: python -m app.multi_scheduler
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/service-account.json
+          YOUTUBE_COOKIES_PATH: ${{ github.workspace }}/youtube_cookies.txt
+        run: python3 -m app.multi_scheduler
 
       - name: Upload generated shorts
         if: always()
@@ -130,9 +116,6 @@ jobs:
 
       - name: Cleanup
         if: always()
-        shell: powershell
         run: |
-          # 一時ファイルをクリーンアップ（オプション）
-          if (Test-Path "service-account.json") { Remove-Item "service-account.json" -Force }
-          if (Test-Path "youtube_cookies.txt") { Remove-Item "youtube_cookies.txt" -Force }
-          Write-Host "Cleanup completed"
+          rm -f service-account.json youtube_cookies.txt
+          echo "Cleanup completed"
