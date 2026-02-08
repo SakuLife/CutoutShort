@@ -116,3 +116,38 @@ GASのCLIENT_ID/SECRET は .env と同じ値に統一する。
 ## カスタム例外
 
 各モジュールに専用例外がある: `YtDlpError`, `TranscribeError`, `CutFinderError`, `RenderError`, `DriveIOError`, `YouTubeChannelError`
+
+## GitHub Actions ランナー切り替え
+
+現在: **Self-hosted**（自分のPC）
+
+ワークフローファイル:
+- `auto-shorts.yml` - 現在使用中
+- `auto-shorts.github-hosted.yml.bak` - GitHub-hosted用バックアップ
+
+### GitHub-hostedに戻す（無料枠が復活したら）
+
+```powershell
+cd D:\AutoSystem\PythonSystem\CutoutShort\.github\workflows
+Rename-Item auto-shorts.yml auto-shorts.self-hosted.yml.bak
+Rename-Item auto-shorts.github-hosted.yml.bak auto-shorts.yml
+git add . && git commit -m "switch to github-hosted" && git push
+```
+
+### Self-hostedに戻す
+
+```powershell
+cd D:\AutoSystem\PythonSystem\CutoutShort\.github\workflows
+Rename-Item auto-shorts.yml auto-shorts.github-hosted.yml.bak
+Rename-Item auto-shorts.self-hosted.yml.bak auto-shorts.yml
+git add . && git commit -m "switch to self-hosted" && git push
+```
+
+### Self-hostedランナーの起動
+
+```powershell
+cd D:\AutoSystem\PythonSystem\CutoutShort\.runner
+.\run.cmd
+```
+
+常時起動したい場合はタスクスケジューラに登録（PC起動時に `run.cmd` を実行）。
