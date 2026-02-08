@@ -54,7 +54,9 @@ jobs:
             $jsonObj.private_key = $jsonObj.private_key -replace '\\n', "`n"
           }
 
-          $jsonObj | ConvertTo-Json -Depth 10 | Set-Content -Path "service-account.json" -Encoding UTF8
+          # Write UTF-8 without BOM
+          $jsonText = $jsonObj | ConvertTo-Json -Depth 10
+          [System.IO.File]::WriteAllText("$PWD\service-account.json", $jsonText)
           Write-Host "service-account.json created successfully"
 
       - name: Create .env file
@@ -94,7 +96,7 @@ jobs:
 
           MAX_RETRIES=3
           RETRY_BACKOFF_BASE=2.0
-          "@ | Set-Content -Path ".env" -Encoding UTF8
+          "@ | Out-String | ForEach-Object { [System.IO.File]::WriteAllText("$PWD\.env", $_) }
 
       - name: Set up YouTube cookies
         shell: powershell
@@ -102,7 +104,7 @@ jobs:
           YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
         run: |
           if ($env:YOUTUBE_COOKIES) {
-            $env:YOUTUBE_COOKIES | Set-Content -Path "youtube_cookies.txt" -Encoding UTF8
+            [System.IO.File]::WriteAllText("$PWD\youtube_cookies.txt", $env:YOUTUBE_COOKIES)
             Write-Host "YouTube cookies file created"
           } else {
             Write-Host "No YouTube cookies configured"
