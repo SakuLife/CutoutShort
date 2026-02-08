@@ -20,7 +20,7 @@ google-generativeai==0.8.3
 
 # Video Processing
 yt-dlp[default]>=2025.11.12
-# PO Token plugin: Rust版zip（jim60105）を使用。pip版（Brainicism）は互換性なし
+# PO Token plugin: Use Rust zip (jim60105), not pip version (Brainicism)
 Pillow==11.0.0
 
 # Utilities
