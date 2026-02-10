@@ -172,6 +172,30 @@ def download_youtube_video(
             if result:
                 return result
 
+        # フォーマット不可時: Cookiesなしでリトライ（Cookies劣化対策）
+        if "Requested format is not available" in stderr:
+            log_warning(
+                "Format unavailable with cookies, retrying without cookies",
+                job_id=job_id,
+            )
+            retry_cmd = _build_base_cmd()
+            retry_cmd.extend(_build_download_args(output_path, url))
+            # 認証引数を追加しない（Cookiesなし）
+            retry_cmd.append(url)
+            try:
+                subprocess.run(
+                    retry_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=config.DOWNLOAD_TIMEOUT,
+                    check=True,
+                )
+                log_info(f"YouTube download completed (no cookies): {output_path}", job_id=job_id)
+                if Path(output_path).exists():
+                    return output_path
+            except subprocess.CalledProcessError:
+                log_warning("Retry without cookies also failed", job_id=job_id)
+
         log_error(
             f"yt-dlp failed with return code {e.returncode}",
             job_id=job_id,
