@@ -21,6 +21,7 @@ jobs:
           echo "Python: $(python3 --version)"
           echo "ffmpeg: $(ffmpeg -version 2>&1 | head -1)"
           echo "yt-dlp: $(yt-dlp --version)"
+          echo "deno: $(deno --version | head -1)"
           echo "Working directory: $PWD"
 
       - name: Install Python dependencies
