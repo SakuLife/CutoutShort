@@ -100,11 +100,19 @@ class SegmentInfo(BaseModel):
     hook_text: str | None = Field(default=None, description="本動画への誘導テキスト")
 
 
+class WordTimestamp(BaseModel):
+    """単語レベルタイムスタンプ"""
+    word: str = Field(description="単語テキスト")
+    start: float = Field(description="開始時刻（秒）")
+    end: float = Field(description="終了時刻（秒）")
+
+
 class TranscriptSegment(BaseModel):
     """文字起こしセグメント"""
     start: float = Field(description="開始時刻（秒）")
     end: float = Field(description="終了時刻（秒）")
     text: str = Field(description="テキスト")
+    words: list[WordTimestamp] = Field(default_factory=list, description="単語レベルタイムスタンプ")
 
 
 class JobArtifacts(BaseModel):

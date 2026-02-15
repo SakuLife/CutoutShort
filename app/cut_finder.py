@@ -189,11 +189,20 @@ def _pick_segments_llm(
     """
     log_info("Using LLM for segment extraction", job_id=job_id)
 
-    # トランスクリプトをテキストに変換
-    transcript_text = "\n".join([
-        f"[{seg.start:.1f}s - {seg.end:.1f}s] {seg.text}"
-        for seg in transcript_json
-    ])
+    # トランスクリプトをテキストに変換（単語タイムスタンプ付き）
+    transcript_lines = []
+    for seg in transcript_json:
+        if seg.words:
+            # 単語レベルのタイムスタンプを付与（精密カット用）
+            word_parts = " ".join([
+                f"{w.word}({w.end:.1f}s)" for w in seg.words
+            ])
+            transcript_lines.append(
+                f"[{seg.start:.1f}s - {seg.end:.1f}s] {seg.text}\n  単語: {word_parts}"
+            )
+        else:
+            transcript_lines.append(f"[{seg.start:.1f}s - {seg.end:.1f}s] {seg.text}")
+    transcript_text = "\n".join(transcript_lines)
 
     # プロンプトを構築
     prompt = f"""あなたはYouTubeショート動画のエディターです。
@@ -202,7 +211,26 @@ def _pick_segments_llm(
 ## 目的
 ショート動画を見た視聴者が「続きが気になる」「本動画を見たい」と思うようにすること。
 
-## 動画タイプ別ルール（重要）
+## ★最重要ルール: 自然なカット境界（これを最優先で守ること）
+
+### 開始地点のルール
+- ✅ 文や話題の冒頭から開始する
+- ✅ 「では」「さて」「次に」などの接続詞の直後から開始
+- ❌ 文の途中から開始しない（視聴者が文脈を失う）
+
+### 終了地点のルール（最重要）
+- ✅ 文末（。！？）の直後で終了する — 最も自然
+- ✅ 意図的な「引き」: 核心の直前で切る場合は、直前の文は完結させる
+- ❌ 単語の途中で切らない（絶対NG）
+- ❌ 「〜が」「〜で」「〜して」など助詞・接続助詞の直後で切らない
+- ❌ 「〜ということは」「〜なんですけど」のような接続表現の途中で切らない
+
+### 単語タイムスタンプの活用
+文字起こしには各単語の終了時刻が付与されています（例: 食べた(12.3s)）。
+endの値は、**最後の完結した文の最終単語の終了時刻**を使ってください。
+セグメント境界に縛られず、単語単位で精密にカットポイントを指定できます。
+
+## 動画タイプ別ルール
 
 ### クイズ・問題系
 - ❌ 絶対NG: 問題の途中で切る、回答発表の直前で切る
@@ -225,35 +253,38 @@ def _pick_segments_llm(
 - ✅ 誘導: 核心部分の直前で切り、「驚きの事実は本動画で」
 
 ## スコアリング基準（0.0〜1.0）
-- 0.9〜1.0: 強い誘導効果（続きが非常に気になる切り方）
+- 0.9〜1.0: 強い誘導効果 + 開始・終了ともに自然
 - 0.7〜0.8: 良い区切り（内容が完結＋興味を引く）
 - 0.5〜0.6: 普通（区切りは良いが誘導効果は弱い）
-- 0.3〜0.4: 微妙（区切りが不自然）
-- 0.0〜0.2: 不適切（途中で切れている）
+- 0.3〜0.4: 微妙（区切りが不自然）→ これは出力しないでください
+- 0.0〜0.2: 不適切（途中で切れている）→ これは出力しないでください
 
 ## 動画タイトル
 {title_hint or "不明"}
 
-## 文字起こし
-{transcript_text[:6000]}
+## 文字起こし（単語タイムスタンプ付き）
+{transcript_text[:8000]}
 
 ## 出力形式
 以下のJSON配列のみを返してください（説明文は不要）：
 [
   {{
-    "start": 開始秒数（float）,
-    "end": 終了秒数（float）,
+    "start": 開始秒数（float、文の冒頭の単語タイムスタンプを使用）,
+    "end": 終了秒数（float、最後の完結文の末尾単語タイムスタンプを使用）,
     "reason": "選定理由（30文字以内）",
-    "score": スコア（0.0〜1.0）,
-    "hook_text": "本動画への誘導テキスト（20文字以内、例：衝撃の結末は本動画で！）"
+    "score": スコア（0.5〜1.0、0.5未満は出力しない）,
+    "hook_text": "本動画への誘導テキスト（20文字以内、例：衝撃の結末は本動画で！）",
+    "end_text": "カット終了地点の直前5〜10文字（検証用）"
   }}
 ]
 
 ## 注意事項
-- start/endは文字起こしのタイムスタンプから選択
+- start/endは単語タイムスタンプから精密に選択する（セグメント境界に縛られない）
 - {min_sec}秒以上{max_sec}秒以内の区間のみ
 - 区間の重複は避ける
 - hook_textは視聴者が本動画を見たくなる短いフレーズ
+- end_textでカット末尾の文が完結しているか必ず自己検証すること
+- スコア0.5未満の低品質セグメントは出力しない
 """
 
     try:
@@ -288,7 +319,7 @@ def _pick_segments_llm(
             safety_settings=safety_settings,
             generation_config={
                 "temperature": 0.7,
-                "max_output_tokens": 3000,  # 日本語対応のため増やす (1500 -> 3000)
+                "max_output_tokens": 4000,  # 単語タイムスタンプ+end_text追加分
             }
         )
 
@@ -306,16 +337,29 @@ def _pick_segments_llm(
         # JSONをパース - より堅牢な抽出
         candidates = _extract_json_from_response(content, job_id=job_id)
 
-        # SegmentInfoに変換
+        # SegmentInfoに変換（単語タイムスタンプにスナップ）
         segments = []
         for cand in candidates:
-            duration = cand["end"] - cand["start"]
+            start = cand["start"]
+            end = cand["end"]
 
-            # 条件チェック
+            # 単語タイムスタンプにスナップして精密なカットポイントに補正
+            start = _snap_to_word_boundary(transcript_json, start, mode="start")
+            end = _snap_to_word_boundary(transcript_json, end, mode="end")
+
+            # 文末（句読点）にスナップしてブツ切り防止
+            end = _snap_end_to_sentence_boundary(
+                transcript_json, end, min_sec=min_sec,
+                start_sec=start, max_sec=max_sec,
+            )
+
+            duration = end - start
+
+            # 条件チェック（スナップ後に再検証）
             if min_sec <= duration <= max_sec:
                 segments.append(SegmentInfo(
-                    start=cand["start"],
-                    end=cand["end"],
+                    start=start,
+                    end=end,
                     score=cand.get("score", 0.7),
                     method="llm",
                     reason=cand.get("reason", ""),
@@ -358,9 +402,13 @@ def _pick_segments_rule_based(
     # 文字起こしの句読点と無音を境界候補とする
     boundaries = set()
 
-    # 句読点境界
+    # 句読点境界（単語レベルで精密に検出）
     for seg in transcript_json:
-        if seg.text.endswith(("。", "！", "？", ".", "!", "?")):
+        if seg.words:
+            for w in seg.words:
+                if w.word.rstrip().endswith(("。", "！", "？", ".", "!", "?")):
+                    boundaries.add(w.end)
+        elif seg.text.endswith(("。", "！", "？", ".", "!", "?")):
             boundaries.add(seg.end)
 
     # 無音境界
@@ -550,6 +598,103 @@ def _remove_overlapping_segments(
             result.append(seg)
 
     return result
+
+
+def _snap_to_word_boundary(
+    transcript_json: list[TranscriptSegment],
+    time_sec: float,
+    mode: str = "end",
+    tolerance: float = 1.5,
+) -> float:
+    """
+    指定時刻を最寄りの単語境界にスナップする
+
+    Args:
+        transcript_json: 文字起こしセグメントリスト
+        time_sec: スナップ対象の時刻（秒）
+        mode: "start"なら単語の開始時刻、"end"なら単語の終了時刻にスナップ
+        tolerance: 許容誤差（秒）。この範囲内で最も近い境界を探す
+
+    Returns:
+        スナップ後の時刻（秒）
+    """
+    # 全単語を収集
+    all_words = []
+    for seg in transcript_json:
+        for w in seg.words:
+            all_words.append(w)
+
+    if not all_words:
+        return time_sec
+
+    # 最も近い単語境界を探す
+    best_time = time_sec
+    best_dist = tolerance + 1
+
+    for w in all_words:
+        target = w.start if mode == "start" else w.end
+        dist = abs(target - time_sec)
+        if dist < best_dist:
+            best_dist = dist
+            best_time = target
+
+    return best_time if best_dist <= tolerance else time_sec
+
+
+def _snap_end_to_sentence_boundary(
+    transcript_json: list[TranscriptSegment],
+    end_sec: float,
+    min_sec: float,
+    start_sec: float,
+    max_sec: float,
+    tolerance: float = 3.0,
+) -> float:
+    """
+    終了時刻を文末（句読点）の直後にスナップする
+
+    句読点（。！？）で終わる単語の終了時刻のうち、
+    end_secに最も近いものを選ぶ。
+
+    Args:
+        transcript_json: 文字起こしセグメントリスト
+        end_sec: 現在の終了時刻
+        min_sec: 最小秒数
+        start_sec: セグメント開始時刻
+        max_sec: 最大秒数
+        tolerance: 許容誤差（秒）
+
+    Returns:
+        スナップ後の終了時刻
+    """
+    sentence_endings = []
+
+    for seg in transcript_json:
+        if seg.words:
+            # 単語レベルで句読点を探す
+            for w in seg.words:
+                if w.word.rstrip().endswith(("。", "！", "？", ".", "!", "?")):
+                    sentence_endings.append(w.end)
+        else:
+            # 単語情報がない場合はセグメント末尾を使う
+            if seg.text.endswith(("。", "！", "？", ".", "!", "?")):
+                sentence_endings.append(seg.end)
+
+    if not sentence_endings:
+        return end_sec
+
+    # end_secに近い文末を探す（duration制約を守る）
+    best_end = end_sec
+    best_dist = tolerance + 1
+
+    for se in sentence_endings:
+        duration = se - start_sec
+        if min_sec <= duration <= max_sec:
+            dist = abs(se - end_sec)
+            if dist < best_dist:
+                best_dist = dist
+                best_end = se
+
+    return best_end if best_dist <= tolerance else end_sec
 
 
 def _calculate_overlap(seg1: SegmentInfo, seg2: SegmentInfo) -> float:

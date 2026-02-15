@@ -6,7 +6,7 @@ from faster_whisper import WhisperModel
 
 from app.config import config
 from app.logging_utils import log_error, log_info
-from app.models import TranscriptSegment
+from app.models import TranscriptSegment, WordTimestamp
 
 
 class TranscribeError(Exception):
@@ -63,7 +63,7 @@ def transcribe_to_srt(
             in_mp4,
             language="ja",  # 日本語優先（自動検出も可）
             vad_filter=True,  # 音声区間検出
-            word_timestamps=False  # 単語レベルのタイムスタンプは不要
+            word_timestamps=True  # 単語レベルのタイムスタンプで精密カット
         )
 
         log_info(
@@ -82,12 +82,21 @@ def transcribe_to_srt(
         segment_num = 1
 
         for segment in segments:
+            # 単語レベルタイムスタンプを収集
+            word_timestamps: list[WordTimestamp] = []
+            if segment.words:
+                for w in segment.words:
+                    word_timestamps.append(
+                        WordTimestamp(word=w.word.strip(), start=w.start, end=w.end)
+                    )
+
             # transcript JSON用
             transcript_segments.append(
                 TranscriptSegment(
                     start=segment.start,
                     end=segment.end,
-                    text=segment.text.strip()
+                    text=segment.text.strip(),
+                    words=word_timestamps,
                 )
             )
 

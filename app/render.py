@@ -102,6 +102,7 @@ def _render_single_clip(
         hook_text: 本動画誘導テキスト（オーバーレイ下部に表示）
     """
     duration = end - start
+    fade_duration = 0.5  # フェードアウト秒数
 
     overlay_path = Path(output_path).with_suffix(".overlay.png")
     generate_overlay_card(
@@ -110,11 +111,18 @@ def _render_single_clip(
         hook_text=hook_text,
     )
 
+    # 粗シーク: 5秒前にジャンプ（高速化）、精密シークは-ssで正確な位置へ
+    coarse_seek = max(0, start - 5)
+    fine_seek = start - coarse_seek
+
     # メイン映像を9:16にレターボックス化（端が見切れないよう95%にスケール）
+    # + 末尾フェードアウト（映像）
+    fade_start = duration - fade_duration
     vf_main = (
         "scale=iw*min(1080/iw\\,1920/ih)*0.95:ih*min(1080/iw\\,1920/ih)*0.95,"
         "pad=1080:1920:(1080-iw)/2:(1920-ih)/2,"
-        "setsar=1"
+        "setsar=1,"
+        f"fade=t=out:st={fade_start:.2f}:d={fade_duration:.2f}"
     )
 
     # オーバーレイを重ねる
@@ -124,17 +132,23 @@ def _render_single_clip(
         "[base][ol]overlay=0:0,format=yuv420p[outv]"
     )
 
-    af = "loudnorm=I=-16:TP=-1.5:LRA=11"
+    # 音声: ラウドネス正規化 + 末尾フェードアウト
+    af = (
+        "loudnorm=I=-16:TP=-1.5:LRA=11,"
+        f"afade=t=out:st={fade_start:.2f}:d={fade_duration:.2f}"
+    )
 
     cmd = [
         "ffmpeg",
         "-y",
         "-ss",
-        str(start),
-        "-t",
-        str(duration),
+        str(coarse_seek),      # 粗シーク（入力前、キーフレームにジャンプ）
         "-i",
         in_mp4,
+        "-ss",
+        f"{fine_seek:.3f}",    # 精密シーク（デコード後、フレーム精度）
+        "-t",
+        str(duration),
         "-i",
         str(overlay_path),
         "-filter_complex",
