@@ -6,6 +6,10 @@ on:
     - cron: '0 6 * * *'
   workflow_dispatch:  # 手動実行も可能
 
+permissions:
+  actions: write
+  contents: read
+
 jobs:
   process-videos:
     runs-on: self-hosted  # セルフホストランナー（WSL Ubuntu）
