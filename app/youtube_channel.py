@@ -35,13 +35,13 @@ class YouTubeChannelError(Exception):
     pass
 
 
-def get_latest_video(
+def get_latest_videos(
     channel_id: str,
     api_key: str,
     min_duration_sec: int = 60
-) -> VideoInfo | None:
+) -> list[VideoInfo]:
     """
-    チャンネルの最新動画を取得（ショート動画はスキップ）
+    チャンネルの最新動画を複数取得（ショート動画はスキップ）
 
     Args:
         channel_id: YouTubeチャンネルID（UCで始まる）
@@ -49,7 +49,7 @@ def get_latest_video(
         min_duration_sec: 最小動画長（秒）。これ未満はスキップ（デフォルト60秒）
 
     Returns:
-        最新動画の情報、取得失敗時はNone
+        適格な動画のリスト（新しい順）
     """
     log_info(f"Fetching latest video for channel: {channel_id}")
 
@@ -57,7 +57,7 @@ def get_latest_video(
     uploads_playlist_id = _get_uploads_playlist_id(channel_id, api_key)
     if not uploads_playlist_id:
         log_error(f"Failed to get uploads playlist for channel: {channel_id}")
-        return None
+        return []
 
     # プレイリストから最新動画を複数取得（ショートをスキップするため）
     url = "https://www.googleapis.com/youtube/v3/playlistItems"
@@ -75,7 +75,9 @@ def get_latest_video(
 
         if not data.get("items"):
             log_info(f"No videos found for channel: {channel_id}")
-            return None
+            return []
+
+        videos: list[VideoInfo] = []
 
         # 各動画の長さをチェックしてショートをスキップ
         for item in data["items"]:
@@ -107,14 +109,26 @@ def get_latest_video(
                 meta={"video_id": video_info.video_id, "duration": duration}
             )
 
-            return video_info
+            videos.append(video_info)
 
-        log_info(f"No suitable videos found (all shorts?) for channel: {channel_id}")
-        return None
+        if not videos:
+            log_info(f"No suitable videos found (all shorts?) for channel: {channel_id}")
+
+        return videos
 
     except requests.RequestException as e:
         log_error(f"Failed to fetch latest video: {e}")
-        return None
+        return []
+
+
+def get_latest_video(
+    channel_id: str,
+    api_key: str,
+    min_duration_sec: int = 60
+) -> VideoInfo | None:
+    """後方互換用ラッパー: 最新の適格動画1件を返す"""
+    videos = get_latest_videos(channel_id, api_key, min_duration_sec)
+    return videos[0] if videos else None
 
 
 def _get_video_duration(video_id: str, api_key: str) -> int | None:

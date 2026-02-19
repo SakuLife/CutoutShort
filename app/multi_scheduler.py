@@ -23,6 +23,7 @@ from app.models import CreateJobRequest, Job, JobArtifacts, JobOptions
 from app.sheets import (
     add_shorts_to_queue,
     get_pending_shorts,
+    get_processed_video_ids,
     get_queue_stats,
     get_youtubers,
     mark_short_uploaded,
@@ -30,7 +31,7 @@ from app.sheets import (
     update_youtuber_last_video,
 )
 from app.worker import run_job
-from app.youtube_channel import VideoInfo, YouTuberInfo, get_latest_video, get_video_url, refresh_access_token
+from app.youtube_channel import VideoInfo, YouTuberInfo, get_latest_videos, get_video_url, refresh_access_token
 
 # デバッグログ保存ディレクトリ
 DEBUG_LOG_DIR = Path(os.getenv("DEBUG_LOG_DIR", "logs/debug"))
@@ -224,21 +225,34 @@ async def process_youtuber(youtuber: YouTuberInfo) -> dict:
     log_info(f"  CHANNEL: {youtuber.name}")
     log_info("-" * 60)
 
-    # 最新動画を取得
-    log_info(f"  Fetching latest video...")
-    latest_video = get_latest_video(youtuber.channel_id, YOUTUBE_API_KEY)
+    # 最新動画を取得（複数候補）
+    log_info(f"  Fetching latest videos...")
+    candidates = get_latest_videos(youtuber.channel_id, YOUTUBE_API_KEY)
 
-    if not latest_video:
+    if not candidates:
         log_warning(f"  No videos found")
         return {"status": "skipped", "message": "No videos found", "short_url": None}
 
-    log_info(f"  Latest: {latest_video.title[:40]}...")
-    log_info(f"  Video ID: {latest_video.video_id}")
+    # UploadLogから処理済み動画IDを取得
+    processed_ids = get_processed_video_ids(youtuber.channel_id)
+    if youtuber.last_video_id:
+        processed_ids.add(youtuber.last_video_id)
 
-    # 既に処理済みかチェック
-    if youtuber.last_video_id == latest_video.video_id:
-        log_info(f"  Already processed - skipping")
-        return {"status": "skipped", "message": "Already processed", "short_url": None}
+    # 未処理の動画を探す
+    latest_video: VideoInfo | None = None
+    for video in candidates:
+        if video.video_id in processed_ids:
+            log_info(f"  Already processed: {video.title[:40]}... - trying next")
+            continue
+        latest_video = video
+        break
+
+    if not latest_video:
+        log_info(f"  All {len(candidates)} videos already processed - skipping")
+        return {"status": "skipped", "message": "All videos processed", "short_url": None}
+
+    log_info(f"  Selected: {latest_video.title[:40]}...")
+    log_info(f"  Video ID: {latest_video.video_id}")
 
     # 1. 動画からショート候補を生成
     log_info(f"  Generating short candidates...")

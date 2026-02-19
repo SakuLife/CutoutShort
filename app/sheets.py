@@ -475,6 +475,48 @@ def record_upload(
         raise
 
 
+def get_processed_video_ids(
+    channel_id: str,
+    spreadsheet_id: str | None = None,
+    sheet_name: str = "UploadLog"
+) -> set[str]:
+    """
+    UploadLogから指定チャンネルの処理済み元動画IDを取得
+
+    Args:
+        channel_id: チャンネルID
+        spreadsheet_id: スプレッドシートID
+        sheet_name: シート名
+
+    Returns:
+        処理済み元動画IDのセット
+    """
+    if not spreadsheet_id:
+        spreadsheet_id = config.SPREADSHEET_ID
+
+    if not spreadsheet_id:
+        return set()
+
+    try:
+        worksheet = get_sheet(spreadsheet_id, sheet_name)
+        rows = worksheet.get_all_values()
+
+        if len(rows) <= 1:
+            return set()
+
+        # ヘッダー行をスキップ、L列(12列目)=元動画ID
+        processed_ids: set[str] = set()
+        for row in rows[1:]:
+            if len(row) >= 12 and row[11]:  # 元動画ID列
+                processed_ids.add(row[11])
+
+        return processed_ids
+
+    except Exception as e:
+        log_warning(f"Failed to get processed video IDs: {e}")
+        return set()
+
+
 # ===========================================
 # ShortsQueue機能（ショート動画のストック管理）
 # ===========================================
