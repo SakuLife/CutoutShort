@@ -223,7 +223,24 @@ def refresh_access_token(refresh_token: str, client_id: str, client_secret: str)
 
     try:
         response = requests.post(url, data=payload, timeout=30)
-        response.raise_for_status()
+
+        if not response.ok:
+            # Google OAuthエラーの詳細を記録
+            try:
+                error_data = response.json()
+                error_code = error_data.get("error", "unknown")
+                error_desc = error_data.get("error_description", "")
+                log_error(
+                    f"Token refresh failed: HTTP {response.status_code} "
+                    f"| {error_code}: {error_desc}"
+                )
+            except Exception:
+                log_error(
+                    f"Token refresh failed: HTTP {response.status_code} "
+                    f"| {response.text[:300]}"
+                )
+            return None
+
         data = response.json()
 
         access_token = data.get("access_token")
