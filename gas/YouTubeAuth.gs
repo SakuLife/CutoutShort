@@ -12,11 +12,11 @@
 // ===========================================
 // 設定（Google Cloud Consoleから取得）
 // ===========================================
-const CLIENT_ID = '1034686313173-79sqlpocrov9qeesk5h915lomh0mcj0s.apps.googleusercontent.com';
-const CLIENT_SECRET = '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';
+const CLIENT_ID = 'YOUR_CLIENT_ID_HERE';
+const CLIENT_SECRET = 'YOUR_CLIENT_SECRET_HERE';
 
 // スプレッドシートID
-const SPREADSHEET_ID = '1nLv7qk1oZH4unzkVl-5Z6bE6Gx5Z83x89oKtsrLDw60';
+const SPREADSHEET_ID = 'YOUR_SPREADSHEET_ID_HERE';
 const SHEET_NAME = 'YouTubers';
 
 // OAuthスコープ（YouTubeアップロード権限）

@@ -19,8 +19,8 @@ YouTubeへの自動アップロード機能を使う場合はこちら。
 #### 1. リポジトリをクローン・更新
 
 ```bash
-git clone https://github.com/takurooohirai-boop/cut-out-short.git
-cd cut-out-short
+git clone https://github.com/<your-username>/<your-repo>.git
+cd <your-repo>
 git pull
 ```
 
@@ -36,7 +36,7 @@ Google Cloud Consoleからダウンロードした `client_secret_xxx.json` を 
 
 ```bash
 # 例: ダウンロードフォルダから移動
-mv ~/Downloads/client_secret_92224762251-*.json ./client_secret.json
+mv ~/Downloads/client_secret_*.json ./client_secret.json
 ```
 
 #### 4. YouTube認証トークンを生成
@@ -51,7 +51,6 @@ python generate_youtube_token.py
 - アクセス権限を「許可」
 
 成功すると、以下のような1行のJSONが表示されます:
-これをココナラで送ってください。
 
 ```json
 {"token": "ya29.a0...", "refresh_token": "1//0e...", "token_uri": "https://oauth2.googleapis.com/token", ...}
@@ -60,7 +59,7 @@ python generate_youtube_token.py
 
 #### 7. GitHub Secretsに設定
 
-1. GitHubリポジトリ: https://github.com/takurooohirai-boop/cut-out-short
+1. GitHubリポジトリのSettingsページを開く
 2. **Settings** → **Secrets and variables** → **Actions**
 3. 以下の3つのSecretを設定:
 

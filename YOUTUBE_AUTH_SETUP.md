@@ -13,7 +13,7 @@
 ## 手順1: YouTube Data API v3を有効化
 
 1. [Google Cloud Console](https://console.cloud.google.com/) にアクセス
-2. プロジェクト `youtubeauto-476205` を選択
+2. 対象のプロジェクトを選択
 3. 左メニュー → 「APIとサービス」 → 「ライブラリ」
 4. 検索バーで「**YouTube Data API v3**」を検索
 5. 「YouTube Data API v3」をクリック → 「**有効にする**」
@@ -96,7 +96,7 @@ python generate_youtube_token.py
 
 ### 4-1. リポジトリのSettings → Secretsへ移動
 
-1. GitHubリポジトリ（`https://github.com/takurooohirai-boop/cut-out-short`）にアクセス
+1. GitHubリポジトリのSettingsページにアクセス
 2. 「**Settings**」タブをクリック
 3. 左メニュー → 「**Secrets and variables**」 → 「**Actions**」
 

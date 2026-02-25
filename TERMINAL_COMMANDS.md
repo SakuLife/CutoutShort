@@ -15,10 +15,10 @@ PowerShellまたはコマンドプロンプトを開いて以下を実行:
 cd ~/Desktop
 
 # リポジトリをクローン（初回のみ）
-git clone https://github.com/takurooohirai-boop/cut-out-short.git
+git clone https://github.com/<your-username>/<your-repo>.git
 
 # リポジトリに移動
-cd cut-out-short
+cd <your-repo>
 
 # 最新版に更新
 git pull
@@ -33,10 +33,10 @@ git pull
 cd ~/Desktop
 
 # リポジトリをクローン（初回のみ）
-git clone https://github.com/takurooohirai-boop/cut-out-short.git
+git clone https://github.com/<your-username>/<your-repo>.git
 
 # リポジトリに移動
-cd cut-out-short
+cd <your-repo>
 
 # 最新版に更新
 git pull
@@ -46,7 +46,7 @@ git pull
 
 ## 📦 1. 必要なライブラリをインストール
 
-リポジトリのルートディレクトリ（`cut-out-short`フォルダ内）で実行:
+リポジトリのルートディレクトリで実行:
 
 ```bash
 pip install google-auth-oauthlib google-auth-httplib2
@@ -73,7 +73,7 @@ cp ~/Downloads/client_secret_*.json ./client_secret.json
 ### 手動で配置する場合
 
 1. Google Cloud Consoleからダウンロードした `client_secret_xxx.json` を開く
-2. ファイルを `~/Desktop/cut-out-short/` フォルダにドラッグ&ドロップ
+2. ファイルをリポジトリフォルダにドラッグ&ドロップ
 3. ファイル名を `client_secret.json` にリネーム
 
 ---
@@ -105,7 +105,7 @@ python generate_youtube_token.py
 {"token": "ya29.a0...", "refresh_token": "1//0e...", "token_uri": "https://oauth2.googleapis.com/token", ...}
 ```
 
-**この1行をココナラで送ってください。**
+**この1行をGitHub Secretsに設定してください。**
 
 ---
 
@@ -113,23 +113,23 @@ python generate_youtube_token.py
 
 ### サービスアカウントJSONを1行に圧縮
 
-Google Cloud Consoleからダウンロードした `youtubeauto-476205-*.json` を、リポジトリのルートディレクトリに配置してから:
+Google Cloud Consoleからダウンロードしたサービスアカウントの `.json` を、リポジトリのルートディレクトリに配置してから:
 
 **ファイル名を確認:**
 ```bash
 # Windowsの場合
-dir youtubeauto-*.json
+dir *.json
 
 # Mac/Linuxの場合
-ls youtubeauto-*.json
+ls *.json
 ```
 
 **1行に圧縮（ファイル名を実際の名前に置き換えてください）:**
 ```bash
-python -c "import json; print(json.dumps(json.load(open('youtubeauto-476205-3f2e20f04c30.json'))))"
+python -c "import json; print(json.dumps(json.load(open('your-service-account.json'))))"
 ```
 
-**出力された1行のJSONをココナラで送ってください。**
+**出力された1行のJSONをGitHub Secretsに設定してください。**
 
 ### client_secret.json を1行に圧縮
 
@@ -137,13 +137,13 @@ python -c "import json; print(json.dumps(json.load(open('youtubeauto-476205-3f2e
 python -c "import json; print(json.dumps(json.load(open('client_secret.json'))))"
 ```
 
-**出力された1行のJSONをココナラで送ってください。**
+**出力された1行のJSONをGitHub Secretsに設定してください。**
 
 ---
 
 ## 🎯 まとめ: 送ってもらう3つのJSON
 
-以下の3つのコマンドを順番に実行して、出力された1行のJSONをそれぞれココナラで送ってください:
+以下の3つのコマンドを順番に実行して、出力された1行のJSONをそれぞれGitHub Secretsに設定してください:
 
 ### 1️⃣ YouTube認証トークン
 ```bash
@@ -153,7 +153,7 @@ python generate_youtube_token.py
 
 ### 2️⃣ サービスアカウントJSON（ファイル名は実際の名前に置き換え）
 ```bash
-python -c "import json; print(json.dumps(json.load(open('youtubeauto-476205-3f2e20f04c30.json'))))"
+python -c "import json; print(json.dumps(json.load(open('your-service-account.json'))))"
 ```
 → 表示される1行のJSONをコピー
 
@@ -217,4 +217,4 @@ PowerShellでコマンドを実行後、出力を右クリックして「選択�
 
 ## 📞 サポート
 
-問題が解決しない場合は、エラーメッセージのスクリーンショットと一緒にココナラで連絡してください。
+問題が解決しない場合は、エラーメッセージのスクリーンショットと一緒にIssueを作成してください。

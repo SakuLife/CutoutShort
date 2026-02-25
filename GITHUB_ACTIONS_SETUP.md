@@ -5,7 +5,7 @@ GitHubリポジトリでこの自動化システムを動かすための設定�
 ## 1. GitHub Secrets の設定
 
 以下のURLから、リポジトリのSecretsを設定してください:
-https://github.com/SakuLife/CutoutShort/settings/secrets/actions
+リポジトリの Settings → Secrets and variables → Actions
 
 「New repository secret」をクリックして、以下の8つのSecretsを追加します。
 

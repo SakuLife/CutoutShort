@@ -33,6 +33,8 @@ env/
 # Google認証情報
 service-account.json
 credentials/*.json
+cutoutshort-*.json
+client_secret*.json
 
 # 一時ファイル
 /tmp/
