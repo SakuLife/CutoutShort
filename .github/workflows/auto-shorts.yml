@@ -6,32 +6,37 @@ on:
     - cron: '0 6 * * *'
   workflow_dispatch:  # 手動実行も可能
 
-permissions:
-  actions: write
-  contents: read
-
 jobs:
   process-videos:
-    runs-on: self-hosted  # セルフホストランナー（WSL Ubuntu）
+    runs-on: ubuntu-latest  # GitHub-hosted runner
     timeout-minutes: 120  # 最大2時間
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-noto-cjk
+
       - name: Verify environment
         run: |
           echo "=== Environment Check ==="
-          echo "Python: $(python3 --version)"
+          echo "Python: $(python --version)"
           echo "ffmpeg: $(ffmpeg -version 2>&1 | head -1)"
           echo "yt-dlp: $(yt-dlp --version)"
-          echo "deno: $(deno --version | head -1)"
           echo "Working directory: $PWD"
 
       - name: Install Python dependencies
         run: |
-          python3 -m pip install --upgrade pip setuptools wheel --break-system-packages
-          python3 -m pip install -r requirements.txt --break-system-packages
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
       - name: Create output directory
         run: mkdir -p runout
@@ -44,7 +49,7 @@ jobs:
             echo "GOOGLE_SERVICE_ACCOUNT_JSON is not set"
             exit 1
           fi
-          echo "$GOOGLE_SERVICE_ACCOUNT_JSON" | python3 -c "
+          echo "$GOOGLE_SERVICE_ACCOUNT_JSON" | python -c "
           import sys, json
           data = json.load(sys.stdin)
           if 'private_key' in data:
@@ -106,43 +111,21 @@ jobs:
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/service-account.json
           YOUTUBE_COOKIES_PATH: ${{ github.workspace }}/youtube_cookies.txt
-        run: python3 -m app.multi_scheduler
+        run: python -m app.multi_scheduler
 
-      - name: Delete old artifacts
-        if: always()
-        uses: actions/github-script@v7
-        continue-on-error: true
-        with:
-          script: |
-            const res = await github.rest.actions.listArtifactsForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              per_page: 100,
-            });
-            const old = res.data.artifacts.filter(a => a.name.startsWith('shorts-'));
-            for (const a of old) {
-              console.log(`Deleting artifact: ${a.name} (${a.id})`);
-              await github.rest.actions.deleteArtifact({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                artifact_id: a.id,
-              });
-            }
-            console.log(`Deleted ${old.length} old artifacts`);
-
-      - name: Upload logs only
+      - name: Upload generated shorts
         if: always()
         uses: actions/upload-artifact@v4
-        continue-on-error: true
         with:
-          name: logs-${{ github.run_id }}
-          path: runout/*.log
+          name: shorts-${{ github.run_id }}
+          path: |
+            runout/*.mp4
+            runout/*.srt
           if-no-files-found: ignore
-          retention-days: 1
+          retention-days: 7
 
       - name: Cleanup
         if: always()
         run: |
           rm -f service-account.json youtube_cookies.txt
-          rm -rf runout/*.mp4 runout/*.srt
           echo "Cleanup completed"
